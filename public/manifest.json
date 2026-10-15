@@ -1,0 +1,11 @@
+{
+  "manifest_version": 3,
+  "name": "InterviewAI Transcriber",
+  "version": "0.1.0",
+  "description": "Google Meet interview transcription diagnostic MVP",
+  "permissions": ["tabCapture", "audioCapture", "offscreen", "sidePanel", "storage"],
+  "host_permissions": ["http://127.0.0.1:8765/*"],
+  "background": { "service_worker": "background.js", "type": "module" },
+  "side_panel": { "default_path": "sidepanel.html" },
+  "action": { "default_title": "InterviewAI Transcriber" }
+}

@@ -1,0 +1,15 @@
+{
+  "name": "interviewai-transcriber",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node build.mjs",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/chrome": "^0.0.306",
+    "esbuild": "^0.25.0",
+    "typescript": "^5.8.0"
+  }
+}

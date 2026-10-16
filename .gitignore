@@ -4,5 +4,6 @@ diagnostics/
 server/models/
 release/
 build/
+InterviewAI-Windows.zip
 __pycache__/
 *.pyc

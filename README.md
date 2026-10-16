@@ -19,6 +19,8 @@ npm run typecheck
 npm run build
 ```
 
+The committed `dist/` folder is a ready-to-load build for Windows users who download the repository ZIP. Run the build only after changing the source files.
+
 In `chrome://extensions`, enable Developer mode, choose **Load unpacked**, and select `dist/`. With the Google Meet tab selected, click the extension's toolbar icon. This direct action starts Meet capture and opens the side panel. Click **マイクを許可** in the panel and approve Chrome's prompt to capture interviewer audio. The server writes `diagnostics/audio/*-candidate.wav` and `*-interviewer.wav`.
 
 ## Phase 1 acceptance checks

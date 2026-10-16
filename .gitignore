@@ -1,5 +1,4 @@
 node_modules/
-dist/
 diagnostics/
 .venv/
 __pycache__/

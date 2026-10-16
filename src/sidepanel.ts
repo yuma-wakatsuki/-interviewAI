@@ -26,5 +26,8 @@ grantMic.onclick = async () => {
     statusEl.textContent = result.ok ? 'マイクを接続しています。' : `マイク開始失敗: ${result.error}`;
   } catch (error) { statusEl.textContent = `マイク許可失敗: ${String(error)}`; }
 };
-stopButton.onclick = async () => { await chrome.runtime.sendMessage({ type: 'stop' }); statusEl.textContent = '停止しました'; start.disabled = false; stopButton.disabled = true; };
+stopButton.onclick = async () => {
+  await chrome.runtime.sendMessage({ type: 'offscreen-stop' });
+  statusEl.textContent = '停止しました';
+};
 document.querySelector('#export')!.addEventListener('click', () => { const content = entries.filter(e => e.type === 'final').map(e => `[${e.timestamp}] ${e.speaker}: ${e.text}`).join('\n'); const url = URL.createObjectURL(new Blob([content], { type: 'text/plain;charset=utf-8' })); const a = Object.assign(document.createElement('a'), { href: url, download: `interview-${new Date().toISOString()}.txt` }); a.click(); URL.revokeObjectURL(url); });

@@ -1,6 +1,7 @@
 import type { Speaker } from './protocol';
 
 let streams: MediaStream[] = [];
+let audioContexts: AudioContext[] = [];
 let socket: WebSocket | undefined;
 let sequence = 0;
 let microphoneAttached = false;
@@ -37,6 +38,7 @@ function downsample(input: Float32Array, sourceRate: number): Int16Array {
 }
 async function attach(stream: MediaStream, speaker: Speaker, monitor: boolean) {
   const context = new AudioContext();
+  audioContexts.push(context);
   await context.audioWorklet.addModule(chrome.runtime.getURL('audio-worklet.js'));
   const source = context.createMediaStreamSource(stream);
   const worklet = new AudioWorkletNode(context, 'pcm-processor');
@@ -71,5 +73,13 @@ async function startMicrophone() {
   microphoneAttached = true;
   emit({ type: 'diagnostic', detail: 'Interviewer microphone capture started.' });
 }
-function stop() { streams.flatMap(s => s.getTracks()).forEach(t => t.stop()); streams = []; microphoneAttached = false; socket?.close(); socket = undefined; emit({ type: 'diagnostic', detail: 'Capture stopped.' }); }
+function stop() {
+  streams.flatMap(s => s.getTracks()).forEach(t => t.stop());
+  streams = [];
+  audioContexts.forEach(context => context.close().catch(() => undefined));
+  audioContexts = [];
+  microphoneAttached = false;
+  socket?.close(); socket = undefined;
+  emit({ type: 'diagnostic', detail: 'Capture stopped.' });
+}
 chrome.runtime.onMessage.addListener((m, _, sendResponse) => { if (m.type === 'offscreen-start') start(m.streamId).then(() => sendResponse({ ok: true })).catch(e => sendResponse({ ok: false, error: String(e) })); if (m.type === 'offscreen-start-mic') startMicrophone().then(() => sendResponse({ ok: true })).catch(e => sendResponse({ ok: false, error: String(e) })); if (m.type === 'offscreen-stop') { stop(); sendResponse({ ok: true }); } return true; });

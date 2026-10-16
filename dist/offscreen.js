@@ -6,6 +6,7 @@ var sequence = 0;
 var microphoneAttached = false;
 var reconnectEnabled = false;
 var lastQueueWarningAt = 0;
+var reconnectAttempts = 0;
 var pending = [];
 var targetRate = 16e3;
 var packetSamples = targetRate / 10;
@@ -16,16 +17,19 @@ function connect() {
   if (socket?.readyState === WebSocket.OPEN || socket?.readyState === WebSocket.CONNECTING) return;
   socket = new WebSocket("ws://127.0.0.1:8765/ws");
   socket.onopen = () => {
+    reconnectAttempts = 0;
     emit({ type: "diagnostic", detail: "WebSocket connected" });
     flush();
   };
   socket.onmessage = (event) => emit(JSON.parse(event.data));
   socket.onclose = () => {
     if (!reconnectEnabled) return;
-    emit({ type: "diagnostic", detail: "WebSocket disconnected; retrying" });
+    const delay = Math.min(1e3 * 2 ** reconnectAttempts, 1e4);
+    reconnectAttempts += 1;
+    emit({ type: "diagnostic", detail: `WebSocket disconnected; retrying in ${delay / 1e3}s` });
     setTimeout(() => {
       if (reconnectEnabled) connect();
-    }, 1e3);
+    }, delay);
   };
   socket.onerror = () => emit({ type: "diagnostic", detail: "WebSocket error" });
 }
@@ -101,6 +105,7 @@ async function startMicrophone() {
 }
 function stop() {
   reconnectEnabled = false;
+  reconnectAttempts = 0;
   streams.flatMap((s) => s.getTracks()).forEach((t) => t.stop());
   streams = [];
   audioContexts.forEach((context) => context.close().catch(() => void 0));

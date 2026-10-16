@@ -7,6 +7,7 @@ let sequence = 0;
 let microphoneAttached = false;
 let reconnectEnabled = false;
 let lastQueueWarningAt = 0;
+let reconnectAttempts = 0;
 const pending: { speaker: Speaker; pcm: Int16Array }[] = [];
 const targetRate = 16000;
 // AudioWorklet normally emits a few milliseconds at a time. Sending every
@@ -19,12 +20,14 @@ function emit(message: unknown) { chrome.runtime.sendMessage(message).catch(() =
 function connect() {
   if (socket?.readyState === WebSocket.OPEN || socket?.readyState === WebSocket.CONNECTING) return;
   socket = new WebSocket('ws://127.0.0.1:8765/ws');
-  socket.onopen = () => { emit({ type: 'diagnostic', detail: 'WebSocket connected' }); flush(); };
+  socket.onopen = () => { reconnectAttempts = 0; emit({ type: 'diagnostic', detail: 'WebSocket connected' }); flush(); };
   socket.onmessage = event => emit(JSON.parse(event.data));
   socket.onclose = () => {
     if (!reconnectEnabled) return;
-    emit({ type: 'diagnostic', detail: 'WebSocket disconnected; retrying' });
-    setTimeout(() => { if (reconnectEnabled) connect(); }, 1000);
+    const delay = Math.min(1000 * 2 ** reconnectAttempts, 10000);
+    reconnectAttempts += 1;
+    emit({ type: 'diagnostic', detail: `WebSocket disconnected; retrying in ${delay / 1000}s` });
+    setTimeout(() => { if (reconnectEnabled) connect(); }, delay);
   };
   socket.onerror = () => emit({ type: 'diagnostic', detail: 'WebSocket error' });
 }
@@ -103,6 +106,7 @@ async function startMicrophone() {
 }
 function stop() {
   reconnectEnabled = false;
+  reconnectAttempts = 0;
   streams.flatMap(s => s.getTracks()).forEach(t => t.stop());
   streams = [];
   audioContexts.forEach(context => context.close().catch(() => undefined));

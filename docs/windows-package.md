@@ -21,3 +21,9 @@ powershell -ExecutionPolicy Bypass -File .\scripts\build_windows.ps1
 配布先ではZIPを展開し、`Start-InterviewAI.cmd` をダブルクリックしてサーバーを起動する。初回のみChromeの `chrome://extensions` でデベロッパーモードを有効にし、`InterviewAI-Chrome-Extension` を「パッケージ化されていない拡張機能を読み込む」から登録する。これはChromeの拡張機能配布仕様による操作である。
 
 モデルを含むため配布ZIPは大きくなる。Windows実機で生成物の起動、マイク許可、Google Meetでの認識を確認してから社内配布に使う。
+
+## GitHubで作成する方法
+
+ローカルPCでPowerShellを使わずに作成する場合は、GitHubリポジトリの **Actions** から **Build Windows distribution** を選び、**Run workflow** を実行する。完了後、同じ実行画面の **Artifacts** にある `InterviewAI-Windows` をダウンロードする。
+
+GitHub ActionsはWindows環境でモデルを取得し、拡張機能をビルドし、自己完結型サーバーを生成して自動スモークテストを実行する。成果物は30日間ダウンロードできる。

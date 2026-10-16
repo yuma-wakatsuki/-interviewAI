@@ -6,10 +6,16 @@ const start = document.querySelector<HTMLButtonElement>('#start')!;
 const grantMic = document.querySelector<HTMLButtonElement>('#grant-mic')!;
 const stopButton = document.querySelector<HTMLButtonElement>('#stop')!;
 const entries: TranscriptEntry[] = [];
-function render() { transcript.textContent = entries.map(e => e.type === 'diagnostic' ? `[診断] ${e.detail}` : `[${e.timestamp ?? ''}] ${e.speaker}: ${e.text}${e.type === 'partial' ? ' …' : ''}`).join('\n'); }
+const partials = new Map<string, TranscriptEntry>();
+function render() {
+  const finalRows = entries.filter(e => e.type === 'final');
+  transcript.textContent = [...partials.values(), ...finalRows].map(e => e.type === 'partial' ? `${e.speaker}: ${e.text} …` : `[${e.timestamp ?? ''}] ${e.speaker}: ${e.text}`).join('\n');
+}
 chrome.runtime.onMessage.addListener((event: TranscriptEntry) => {
   if (!event.type) return;
-  entries.push(event); render();
+  if (event.type === 'partial' && event.speaker) partials.set(event.speaker, event);
+  else { if (event.type === 'final' && event.speaker) partials.delete(event.speaker); entries.push(event); }
+  render();
   if (event.type === 'diagnostic' && event.detail?.includes('Meet audio capture started')) statusEl.textContent = 'Meet 音声を録音中です。次に「マイクを許可」を押してください。';
   if (event.type === 'diagnostic' && event.detail?.includes('Interviewer microphone capture started')) statusEl.textContent = 'Meet 音声とマイクを録音中です。';
   if (event.type === 'diagnostic' && event.detail?.includes('Capture stopped')) statusEl.textContent = '停止しました。';

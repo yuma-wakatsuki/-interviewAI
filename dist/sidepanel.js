@@ -5,12 +5,18 @@ var start = document.querySelector("#start");
 var grantMic = document.querySelector("#grant-mic");
 var stopButton = document.querySelector("#stop");
 var entries = [];
+var partials = /* @__PURE__ */ new Map();
 function render() {
-  transcript.textContent = entries.map((e) => e.type === "diagnostic" ? `[\u8A3A\u65AD] ${e.detail}` : `[${e.timestamp ?? ""}] ${e.speaker}: ${e.text}${e.type === "partial" ? " \u2026" : ""}`).join("\n");
+  const finalRows = entries.filter((e) => e.type === "final");
+  transcript.textContent = [...partials.values(), ...finalRows].map((e) => e.type === "partial" ? `${e.speaker}: ${e.text} \u2026` : `[${e.timestamp ?? ""}] ${e.speaker}: ${e.text}`).join("\n");
 }
 chrome.runtime.onMessage.addListener((event) => {
   if (!event.type) return;
-  entries.push(event);
+  if (event.type === "partial" && event.speaker) partials.set(event.speaker, event);
+  else {
+    if (event.type === "final" && event.speaker) partials.delete(event.speaker);
+    entries.push(event);
+  }
   render();
   if (event.type === "diagnostic" && event.detail?.includes("Meet audio capture started")) statusEl.textContent = "Meet \u97F3\u58F0\u3092\u9332\u97F3\u4E2D\u3067\u3059\u3002\u6B21\u306B\u300C\u30DE\u30A4\u30AF\u3092\u8A31\u53EF\u300D\u3092\u62BC\u3057\u3066\u304F\u3060\u3055\u3044\u3002";
   if (event.type === "diagnostic" && event.detail?.includes("Interviewer microphone capture started")) statusEl.textContent = "Meet \u97F3\u58F0\u3068\u30DE\u30A4\u30AF\u3092\u9332\u97F3\u4E2D\u3067\u3059\u3002";

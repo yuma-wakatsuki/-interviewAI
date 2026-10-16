@@ -11,8 +11,10 @@ start.onclick = async () => {
   try {
     // This must execute in the button's user gesture.  Asking the service
     // worker later can lose Chrome's active-tab invocation grant.
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (!tab?.id) throw new Error('対象の Meet タブを特定できません。Meet タブを選んでから開始してください。');
     const streamId = await new Promise<string>((resolve, reject) =>
-      chrome.tabCapture.getMediaStreamId({}, id => {
+      chrome.tabCapture.getMediaStreamId({ targetTabId: tab.id }, id => {
         const error = chrome.runtime.lastError;
         if (error) reject(new Error(error.message)); else resolve(id);
       }));

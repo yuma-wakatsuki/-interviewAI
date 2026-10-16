@@ -34,7 +34,8 @@ stopButton.onclick = async () => {
   statusEl.textContent = "\u505C\u6B62\u3057\u307E\u3057\u305F";
 };
 document.querySelector("#export").addEventListener("click", () => {
-  const content = entries.filter((e) => e.type === "final").map((e) => `[${e.timestamp}] ${e.speaker}: ${e.text}`).join("\n");
+  const rows = entries.filter((e) => e.type === "final");
+  const content = [`InterviewAI transcript`, `Exported: ${(/* @__PURE__ */ new Date()).toLocaleString("ja-JP")}`, "", ...rows.map((e) => `[${e.timestamp}] ${e.speaker}: ${e.text}`)].join("\n");
   const url = URL.createObjectURL(new Blob([content], { type: "text/plain;charset=utf-8" }));
   const a = Object.assign(document.createElement("a"), { href: url, download: `interview-${(/* @__PURE__ */ new Date()).toISOString()}.txt` });
   a.click();

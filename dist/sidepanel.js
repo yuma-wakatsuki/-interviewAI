@@ -20,6 +20,12 @@ start.onclick = async () => {
 };
 grantMic.onclick = async () => {
   try {
+    const granted = await chrome.permissions.request({
+      // audioCapture is valid in the Chrome manifest but is missing from the
+      // current @types/chrome union.
+      permissions: ["audioCapture"]
+    });
+    if (!granted) throw new Error("Chrome \u306E\u30DE\u30A4\u30AF\u5229\u7528\u304C\u8A31\u53EF\u3055\u308C\u307E\u305B\u3093\u3067\u3057\u305F\u3002");
     const permissionStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
     permissionStream.getTracks().forEach((track) => track.stop());
     const result = await chrome.runtime.sendMessage({ type: "offscreen-start-mic" });

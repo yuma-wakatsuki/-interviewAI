@@ -18,6 +18,14 @@ start.onclick = async () => {
 };
 grantMic.onclick = async () => {
   try {
+    // audioCapture is optional so Chrome shows a clear extension-permission
+    // dialog in response to this visible user action.
+    const granted = await chrome.permissions.request({
+      // audioCapture is valid in the Chrome manifest but is missing from the
+      // current @types/chrome union.
+      permissions: ['audioCapture'] as unknown as chrome.runtime.ManifestPermissions[],
+    });
+    if (!granted) throw new Error('Chrome のマイク利用が許可されませんでした。');
     // Request permission in the visible panel, where Chrome can display its
     // consent prompt. Offscreen then opens its own stream using that grant.
     const permissionStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });

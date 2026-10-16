@@ -6,6 +6,7 @@ var sequence = 0;
 var microphoneAttached = false;
 var pending = [];
 var targetRate = 16e3;
+var packetSamples = targetRate / 10;
 function emit(message) {
   chrome.runtime.sendMessage(message).catch(() => void 0);
 }
@@ -49,6 +50,7 @@ async function attach(stream, speaker, monitor) {
   await context.audioWorklet.addModule(chrome.runtime.getURL("audio-worklet.js"));
   const source = context.createMediaStreamSource(stream);
   const worklet = new AudioWorkletNode(context, "pcm-processor");
+  let buffered = new Int16Array(0);
   source.connect(worklet);
   if (monitor) {
     source.connect(context.destination);
@@ -58,10 +60,18 @@ async function attach(stream, speaker, monitor) {
     worklet.connect(silent).connect(context.destination);
   }
   worklet.port.onmessage = ({ data }) => {
-    pending.push({ speaker, pcm: downsample(new Float32Array(data), context.sampleRate) });
+    const next = downsample(new Float32Array(data), context.sampleRate);
+    const combined = new Int16Array(buffered.length + next.length);
+    combined.set(buffered);
+    combined.set(next, buffered.length);
+    buffered = combined;
+    while (buffered.length >= packetSamples) {
+      pending.push({ speaker, pcm: buffered.slice(0, packetSamples) });
+      buffered = buffered.slice(packetSamples);
+    }
     if (pending.length > 250) {
       pending.shift();
-      emit({ type: "diagnostic", detail: "audio queue overflow: oldest frame dropped" });
+      emit({ type: "diagnostic", detail: "audio queue overflow: oldest packet dropped" });
     }
     flush();
   };

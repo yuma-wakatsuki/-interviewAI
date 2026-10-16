@@ -7,6 +7,11 @@ let sequence = 0;
 let microphoneAttached = false;
 const pending: { speaker: Speaker; pcm: Int16Array }[] = [];
 const targetRate = 16000;
+// AudioWorklet normally emits a few milliseconds at a time. Sending every
+// callback as an individual WebSocket message overwhelms the browser and the
+// local server long before an interview ends. Keep end-to-end latency low
+// while reducing message volume to ten packets per second per source.
+const packetSamples = targetRate / 10;
 
 function emit(message: unknown) { chrome.runtime.sendMessage(message).catch(() => undefined); }
 function connect() {
@@ -42,6 +47,7 @@ async function attach(stream: MediaStream, speaker: Speaker, monitor: boolean) {
   await context.audioWorklet.addModule(chrome.runtime.getURL('audio-worklet.js'));
   const source = context.createMediaStreamSource(stream);
   const worklet = new AudioWorkletNode(context, 'pcm-processor');
+  let buffered = new Int16Array(0);
   source.connect(worklet);
   if (monitor) {
     // Chrome stops rendering an audio tab when it is captured.  Send only the
@@ -54,8 +60,17 @@ async function attach(stream: MediaStream, speaker: Speaker, monitor: boolean) {
     worklet.connect(silent).connect(context.destination);
   }
   worklet.port.onmessage = ({ data }) => {
-    pending.push({ speaker, pcm: downsample(new Float32Array(data), context.sampleRate) });
-    if (pending.length > 250) { pending.shift(); emit({ type: 'diagnostic', detail: 'audio queue overflow: oldest frame dropped' }); }
+    const next = downsample(new Float32Array(data), context.sampleRate);
+    const combined = new Int16Array(buffered.length + next.length);
+    combined.set(buffered); combined.set(next, buffered.length);
+    buffered = combined;
+    while (buffered.length >= packetSamples) {
+      pending.push({ speaker, pcm: buffered.slice(0, packetSamples) });
+      buffered = buffered.slice(packetSamples);
+    }
+    // At 100 ms per packet this is a 25-second ceiling. Preserve recent audio
+    // and make the loss visible instead of silently accumulating memory.
+    if (pending.length > 250) { pending.shift(); emit({ type: 'diagnostic', detail: 'audio queue overflow: oldest packet dropped' }); }
     flush();
   };
   streams.push(stream);

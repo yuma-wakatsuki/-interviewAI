@@ -19,8 +19,10 @@ MAX_BUFFER_BYTES = RATE * WIDTH * 30
 MIN_PARTIAL_AUDIO_SECONDS = 0.8
 PARTIAL_INTERVAL_SECONDS = 1.0
 MIN_FINAL_AUDIO_SECONDS = 0.6
+MIN_MEANINGFUL_VOICE_SECONDS = 1.0
 FINAL_SILENCE_SAMPLES = int(RATE * 0.8)
 MODEL = Path("server/models/sherpa-onnx-zipformer-ja-reazonspeech-2024-08-01")
+LOW_INFORMATION_RESULTS = {"え", "えっ", "えー", "あ", "あっ", "あー", "うん", "ん", "はい", "何", "なに", "ピッ", "フッ", "おっ", "いい", "うんうん"}
 
 def recognizer() -> sherpa_onnx.OfflineRecognizer:
     return sherpa_onnx.OfflineRecognizer.from_transducer(encoder=str(MODEL/'encoder-epoch-99-avg-1.int8.onnx'), decoder=str(MODEL/'decoder-epoch-99-avg-1.int8.onnx'), joiner=str(MODEL/'joiner-epoch-99-avg-1.int8.onnx'), tokens=str(MODEL/'tokens.txt'), num_threads=4, sample_rate=RATE, feature_dim=80)
@@ -38,6 +40,7 @@ class Session:
         self.last_audio = defaultdict(time.monotonic)
         self.final_text = defaultdict(str)
         self.silence_samples = defaultdict(int)
+        self.voiced_samples = defaultdict(int)
         self.last_rejection = defaultdict(str)
 
     def write(self, speaker: str, data: bytes) -> None:
@@ -56,9 +59,11 @@ class Session:
         if not self.asr or not self.audio[speaker]: return ""
         stream = self.asr.create_stream(); stream.accept_waveform(RATE, np.frombuffer(self.audio[speaker], dtype=np.int16).astype(np.float32)/32768); self.asr.decode_stream(stream); return stream.result.text.strip()
 
-    def rejection_reason(self, speaker: str, text: str) -> str | None:
+    def rejection_reason(self, speaker: str, text: str, voiced_seconds: float) -> str | None:
         compact = re.sub(r"\s+", "", text)
         if not compact: return "empty recognition result"
+        if compact in LOW_INFORMATION_RESULTS: return "low-information acknowledgement or noise"
+        if voiced_seconds < MIN_MEANINGFUL_VOICE_SECONDS: return "voice segment shorter than 1.0 second"
         if re.search(r"(.)\1{7,}", compact): return "repeated-character recognition result"
         if compact == re.sub(r"\s+", "", self.final_text[speaker]): return "duplicate final recognition result"
         return None
@@ -105,14 +110,18 @@ async def ws(websocket: WebSocket) -> None:
             level = float(np.sqrt(np.mean(np.frombuffer(data, dtype=np.int16).astype(np.float32) ** 2)))
             # Use integer samples. Repeated 0.1-second floating point additions
             # can remain infinitesimally below 0.8 and prevent finalization.
-            session.silence_samples[speaker] = session.silence_samples[speaker] + samples if level < 180 else 0
+            if level < 180:
+                session.silence_samples[speaker] += samples
+            else:
+                session.silence_samples[speaker] = 0
+                session.voiced_samples[speaker] += samples
             buffered_seconds = len(session.audio[speaker]) / (RATE * WIDTH)
             if (buffered_seconds >= MIN_PARTIAL_AUDIO_SECONDS
                     and time.monotonic() - session.last_partial[speaker] >= PARTIAL_INTERVAL_SECONDS):
                 started = time.monotonic(); text = await asyncio.wait_for(asyncio.to_thread(session.decode, speaker), timeout=5)
                 record("partial_decode", speaker=speaker, elapsed_ms=round((time.monotonic()-started)*1000, 1), audio_seconds=round(len(session.audio[speaker])/(RATE*WIDTH), 3))
                 session.last_partial[speaker] = time.monotonic()
-                reason = session.rejection_reason(speaker, text)
+                reason = session.rejection_reason(speaker, text, session.voiced_samples[speaker] / RATE)
                 if reason: await session.report_rejection(websocket, speaker, text, reason)
                 else:
                     session.last_rejection[speaker] = ""
@@ -120,18 +129,18 @@ async def ws(websocket: WebSocket) -> None:
             if session.silence_samples[speaker] >= FINAL_SILENCE_SAMPLES and session.audio[speaker]:
                 audio_seconds = len(session.audio[speaker]) / (RATE * WIDTH)
                 if audio_seconds < MIN_FINAL_AUDIO_SECONDS:
-                    session.audio[speaker].clear(); session.silence_samples[speaker] = 0
+                    session.audio[speaker].clear(); session.silence_samples[speaker] = 0; session.voiced_samples[speaker] = 0
                     continue
                 started = time.monotonic(); text = await asyncio.wait_for(asyncio.to_thread(session.decode, speaker), timeout=5)
                 record("final_decode", speaker=speaker, elapsed_ms=round((time.monotonic()-started)*1000, 1), audio_seconds=round(len(session.audio[speaker])/(RATE*WIDTH), 3))
-                reason = session.rejection_reason(speaker, text)
+                reason = session.rejection_reason(speaker, text, session.voiced_samples[speaker] / RATE)
                 if reason:
                     await session.report_rejection(websocket, speaker, text, reason)
                 else:
                     session.last_rejection[speaker] = ""
                     session.final_text[speaker] = text
                     await websocket.send_json({"type":"final", "speaker":speaker, "text":text, "timestamp":time.strftime('%H:%M:%S')})
-                session.audio[speaker].clear(); session.silence_samples[speaker] = 0
+                session.audio[speaker].clear(); session.silence_samples[speaker] = 0; session.voiced_samples[speaker] = 0
             if sequence % 100 == 0:
                 process = psutil.Process(); elapsed = time.monotonic() - session.started
                 logging.info("audio speaker=%s sequence=%d elapsed=%.1fs cpu=%.1f rss=%d", speaker, sequence, elapsed, process.cpu_percent(), process.memory_info().rss)

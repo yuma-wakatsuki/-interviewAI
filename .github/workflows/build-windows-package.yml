@@ -2,18 +2,6 @@ name: Build Windows distribution
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - main
-    paths:
-      - '.github/workflows/build-windows-package.yml'
-      - 'build.mjs'
-      - 'package.json'
-      - 'package-lock.json'
-      - 'src/**'
-      - 'server/**'
-      - 'scripts/**'
-      - 'docs/licenses.md'
 
 permissions:
   contents: read

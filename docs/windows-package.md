@@ -24,6 +24,6 @@ powershell -ExecutionPolicy Bypass -File .\scripts\build_windows.ps1
 
 ## GitHubで作成する方法
 
-ローカルPCでPowerShellを使わずに作成する場合は、GitHubリポジトリの **Actions** から **Build Windows distribution** を選び、**Run workflow** を実行する。完了後、同じ実行画面の **Artifacts** にある `InterviewAI-Windows` をダウンロードする。
+ローカルPCでPowerShellを使わずに作成する場合は、配布版を作るタイミングでGitHubリポジトリの **Actions** から **Build Windows distribution** を選び、**Run workflow** を実行する。完了後、同じ実行画面の **Artifacts** にある `InterviewAI-Windows` をダウンロードする。通常のソースコード更新では、この処理は実行されない。
 
 GitHub ActionsはWindows環境でモデルを取得し、拡張機能をビルドし、自己完結型サーバーを生成して自動スモークテストを実行する。成果物は30日間ダウンロードできる。

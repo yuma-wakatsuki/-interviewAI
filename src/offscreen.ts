@@ -5,6 +5,8 @@ let audioContexts: AudioContext[] = [];
 let socket: WebSocket | undefined;
 let sequence = 0;
 let microphoneAttached = false;
+let reconnectEnabled = false;
+let lastQueueWarningAt = 0;
 const pending: { speaker: Speaker; pcm: Int16Array }[] = [];
 const targetRate = 16000;
 // AudioWorklet normally emits a few milliseconds at a time. Sending every
@@ -19,7 +21,11 @@ function connect() {
   socket = new WebSocket('ws://127.0.0.1:8765/ws');
   socket.onopen = () => { emit({ type: 'diagnostic', detail: 'WebSocket connected' }); flush(); };
   socket.onmessage = event => emit(JSON.parse(event.data));
-  socket.onclose = () => { emit({ type: 'diagnostic', detail: 'WebSocket disconnected; retrying' }); setTimeout(connect, 1000); };
+  socket.onclose = () => {
+    if (!reconnectEnabled) return;
+    emit({ type: 'diagnostic', detail: 'WebSocket disconnected; retrying' });
+    setTimeout(() => { if (reconnectEnabled) connect(); }, 1000);
+  };
   socket.onerror = () => emit({ type: 'diagnostic', detail: 'WebSocket error' });
 }
 function flush() {
@@ -70,12 +76,19 @@ async function attach(stream: MediaStream, speaker: Speaker, monitor: boolean) {
     }
     // At 100 ms per packet this is a 25-second ceiling. Preserve recent audio
     // and make the loss visible instead of silently accumulating memory.
-    if (pending.length > 250) { pending.shift(); emit({ type: 'diagnostic', detail: 'audio queue overflow: oldest packet dropped' }); }
+    if (pending.length > 250) {
+      pending.shift();
+      if (Date.now() - lastQueueWarningAt >= 5000) {
+        lastQueueWarningAt = Date.now();
+        emit({ type: 'diagnostic', detail: 'audio queue overflow: oldest packet dropped' });
+      }
+    }
     flush();
   };
   streams.push(stream);
 }
 async function start(streamId: string) {
+  reconnectEnabled = true;
   connect();
   const tabStream = await navigator.mediaDevices.getUserMedia({ audio: { mandatory: { chromeMediaSource: 'tab', chromeMediaSourceId: streamId } } as MediaTrackConstraints, video: false });
   await attach(tabStream, 'candidate', true);
@@ -89,6 +102,7 @@ async function startMicrophone() {
   emit({ type: 'diagnostic', detail: 'Interviewer microphone capture started.' });
 }
 function stop() {
+  reconnectEnabled = false;
   streams.flatMap(s => s.getTracks()).forEach(t => t.stop());
   streams = [];
   audioContexts.forEach(context => context.close().catch(() => undefined));
@@ -96,6 +110,7 @@ function stop() {
   microphoneAttached = false;
   pending.length = 0;
   sequence = 0;
+  lastQueueWarningAt = 0;
   socket?.close(); socket = undefined;
   emit({ type: 'diagnostic', detail: 'Capture stopped.' });
 }

@@ -4,6 +4,8 @@ var audioContexts = [];
 var socket;
 var sequence = 0;
 var microphoneAttached = false;
+var reconnectEnabled = false;
+var lastQueueWarningAt = 0;
 var pending = [];
 var targetRate = 16e3;
 var packetSamples = targetRate / 10;
@@ -19,8 +21,11 @@ function connect() {
   };
   socket.onmessage = (event) => emit(JSON.parse(event.data));
   socket.onclose = () => {
+    if (!reconnectEnabled) return;
     emit({ type: "diagnostic", detail: "WebSocket disconnected; retrying" });
-    setTimeout(connect, 1e3);
+    setTimeout(() => {
+      if (reconnectEnabled) connect();
+    }, 1e3);
   };
   socket.onerror = () => emit({ type: "diagnostic", detail: "WebSocket error" });
 }
@@ -71,13 +76,17 @@ async function attach(stream, speaker, monitor) {
     }
     if (pending.length > 250) {
       pending.shift();
-      emit({ type: "diagnostic", detail: "audio queue overflow: oldest packet dropped" });
+      if (Date.now() - lastQueueWarningAt >= 5e3) {
+        lastQueueWarningAt = Date.now();
+        emit({ type: "diagnostic", detail: "audio queue overflow: oldest packet dropped" });
+      }
     }
     flush();
   };
   streams.push(stream);
 }
 async function start(streamId) {
+  reconnectEnabled = true;
   connect();
   const tabStream = await navigator.mediaDevices.getUserMedia({ audio: { mandatory: { chromeMediaSource: "tab", chromeMediaSourceId: streamId } }, video: false });
   await attach(tabStream, "candidate", true);
@@ -91,6 +100,7 @@ async function startMicrophone() {
   emit({ type: "diagnostic", detail: "Interviewer microphone capture started." });
 }
 function stop() {
+  reconnectEnabled = false;
   streams.flatMap((s) => s.getTracks()).forEach((t) => t.stop());
   streams = [];
   audioContexts.forEach((context) => context.close().catch(() => void 0));
@@ -98,6 +108,7 @@ function stop() {
   microphoneAttached = false;
   pending.length = 0;
   sequence = 0;
+  lastQueueWarningAt = 0;
   socket?.close();
   socket = void 0;
   emit({ type: "diagnostic", detail: "Capture stopped." });

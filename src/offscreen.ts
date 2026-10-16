@@ -3,6 +3,7 @@ import type { Speaker } from './protocol';
 let streams: MediaStream[] = [];
 let socket: WebSocket | undefined;
 let sequence = 0;
+let microphoneAttached = false;
 const pending: { speaker: Speaker; pcm: Int16Array }[] = [];
 const targetRate = 16000;
 
@@ -61,9 +62,14 @@ async function start(streamId: string) {
   connect();
   const tabStream = await navigator.mediaDevices.getUserMedia({ audio: { mandatory: { chromeMediaSource: 'tab', chromeMediaSourceId: streamId } } as MediaTrackConstraints, video: false });
   await attach(tabStream, 'candidate', true);
+  emit({ type: 'diagnostic', detail: 'Meet audio capture started. Click 「マイクを許可」 to capture interviewer audio.' });
+}
+async function startMicrophone() {
+  if (microphoneAttached) return;
   const micStream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }, video: false });
   await attach(micStream, 'interviewer', false);
-  emit({ type: 'diagnostic', detail: 'tab and microphone capture started' });
+  microphoneAttached = true;
+  emit({ type: 'diagnostic', detail: 'Interviewer microphone capture started.' });
 }
-function stop() { streams.flatMap(s => s.getTracks()).forEach(t => t.stop()); streams = []; socket?.close(); socket = undefined; }
-chrome.runtime.onMessage.addListener((m, _, sendResponse) => { if (m.type === 'offscreen-start') start(m.streamId).then(() => sendResponse({ ok: true })).catch(e => sendResponse({ ok: false, error: String(e) })); if (m.type === 'offscreen-stop') { stop(); sendResponse({ ok: true }); } return true; });
+function stop() { streams.flatMap(s => s.getTracks()).forEach(t => t.stop()); streams = []; microphoneAttached = false; socket?.close(); socket = undefined; emit({ type: 'diagnostic', detail: 'Capture stopped.' }); }
+chrome.runtime.onMessage.addListener((m, _, sendResponse) => { if (m.type === 'offscreen-start') start(m.streamId).then(() => sendResponse({ ok: true })).catch(e => sendResponse({ ok: false, error: String(e) })); if (m.type === 'offscreen-start-mic') startMicrophone().then(() => sendResponse({ ok: true })).catch(e => sendResponse({ ok: false, error: String(e) })); if (m.type === 'offscreen-stop') { stop(); sendResponse({ ok: true }); } return true; });

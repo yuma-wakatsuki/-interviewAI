@@ -29,6 +29,7 @@ class Session:
         self.last_partial = defaultdict(float)
         self.last_audio = defaultdict(time.monotonic)
         self.final_text = defaultdict(str)
+        self.silence_seconds = defaultdict(float)
 
     def write(self, speaker: str, data: bytes) -> None:
         writer = self.wav.get(speaker)
@@ -67,11 +68,18 @@ async def ws(websocket: WebSocket) -> None:
             if sequence <= session.sequence[speaker]: logging.warning("non-monotonic sequence speaker=%s sequence=%s", speaker, sequence)
             session.sequence[speaker] = sequence; session.write(speaker, data)
             session.audio[speaker].extend(data)
-            session.last_audio[speaker] = time.monotonic()
+            level = float(np.sqrt(np.mean(np.frombuffer(data, dtype=np.int16).astype(np.float32) ** 2)))
+            session.silence_seconds[speaker] = session.silence_seconds[speaker] + samples / RATE if level < 180 else 0.0
             if time.monotonic() - session.last_partial[speaker] >= 1.0:
                 text = await asyncio.to_thread(session.decode, speaker)
                 session.last_partial[speaker] = time.monotonic()
                 if text: await websocket.send_json({"type":"partial", "speaker":speaker, "text":text, "timestamp":time.strftime('%H:%M:%S')})
+            if session.silence_seconds[speaker] >= 0.8 and session.audio[speaker]:
+                text = await asyncio.to_thread(session.decode, speaker)
+                if text and text != session.final_text[speaker]:
+                    session.final_text[speaker] = text
+                    await websocket.send_json({"type":"final", "speaker":speaker, "text":text, "timestamp":time.strftime('%H:%M:%S')})
+                session.audio[speaker].clear(); session.silence_seconds[speaker] = 0.0
             if sequence % 100 == 0:
                 process = psutil.Process(); elapsed = time.monotonic() - session.started
                 logging.info("audio speaker=%s sequence=%d elapsed=%.1fs cpu=%.1f rss=%d", speaker, sequence, elapsed, process.cpu_percent(), process.memory_info().rss)

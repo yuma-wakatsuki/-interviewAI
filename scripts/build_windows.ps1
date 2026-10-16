@@ -51,6 +51,8 @@ Audio recognition runs locally. The server does not retain interview audio or tr
 "@
 Set-Content -Path (Join-Path $releaseRoot 'README.txt') -Value $packageGuide -Encoding utf8
 
+& (Join-Path $PSScriptRoot 'test_windows_package.ps1') -ReleaseRoot $releaseRoot
+
 $archive = Join-Path $projectRoot 'InterviewAI-Windows.zip'
 Remove-Item $archive -Force -ErrorAction SilentlyContinue
 $packageFiles = @(

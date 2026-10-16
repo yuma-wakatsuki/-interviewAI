@@ -64,7 +64,9 @@ async def run(seconds: int, url: str, two_speakers: bool) -> None:
             if in_silence:
                 packet = b"\0\0" * (16000 // 10)
                 turn_packets += 1
-                if turn_packets >= 108:
+                # WebRTC VAD has a brief speech hangover. Keep 1.5 seconds of
+                # silence so the server can observe 0.8 seconds of final silence.
+                if turn_packets >= 115:
                     turn_packets = 0
             else:
                 packet = audio[offset:offset + packet_bytes]

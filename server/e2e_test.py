@@ -60,7 +60,9 @@ async def main() -> None:
             candidate_sequence += 1
             interviewer_sequence += 1
             await asyncio.sleep(0.1)
-        for _ in range(8):
+        # WebRTC VAD keeps a short speech hangover after voiced frames. Send
+        # 1.5 seconds so the server observes its 0.8-second final silence.
+        for _ in range(15):
             silence = b"\0\0" * (16000 // 10)
             await send_audio(ws, "candidate", candidate_sequence, silence)
             await send_audio(ws, "interviewer", interviewer_sequence, silence)

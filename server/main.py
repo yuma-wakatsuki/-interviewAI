@@ -6,6 +6,7 @@ from typing import Any
 import numpy as np
 import psutil
 import sherpa_onnx
+import webrtcvad
 from server.metrics import record
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from starlette.websockets import WebSocketState
@@ -23,6 +24,8 @@ MIN_MEANINGFUL_VOICE_SECONDS = 1.0
 FINAL_SILENCE_SAMPLES = int(RATE * 0.8)
 MODEL = Path("server/models/sherpa-onnx-zipformer-ja-reazonspeech-2024-08-01")
 LOW_INFORMATION_RESULTS = {"え", "えっ", "えー", "あ", "あっ", "あー", "うん", "ん", "はい", "何", "なに", "ピッ", "フッ", "おっ", "いい", "うんうん"}
+VAD_FRAME_SAMPLES = RATE // 50  # 20 ms, a WebRTC VAD-supported duration
+VAD_MODE = 2  # Balanced rejection of noise without the most aggressive speech loss
 
 def recognizer() -> sherpa_onnx.OfflineRecognizer:
     return sherpa_onnx.OfflineRecognizer.from_transducer(encoder=str(MODEL/'encoder-epoch-99-avg-1.int8.onnx'), decoder=str(MODEL/'decoder-epoch-99-avg-1.int8.onnx'), joiner=str(MODEL/'joiner-epoch-99-avg-1.int8.onnx'), tokens=str(MODEL/'tokens.txt'), num_threads=4, sample_rate=RATE, feature_dim=80)
@@ -41,6 +44,7 @@ class Session:
         self.final_text = defaultdict(str)
         self.silence_samples = defaultdict(int)
         self.voiced_samples = defaultdict(int)
+        self.vad = {"candidate": webrtcvad.Vad(VAD_MODE), "interviewer": webrtcvad.Vad(VAD_MODE)}
         self.last_rejection = defaultdict(str)
 
     def write(self, speaker: str, data: bytes) -> None:
@@ -58,6 +62,17 @@ class Session:
     def decode(self, speaker: str) -> str:
         if not self.asr or not self.audio[speaker]: return ""
         stream = self.asr.create_stream(); stream.accept_waveform(RATE, np.frombuffer(self.audio[speaker], dtype=np.int16).astype(np.float32)/32768); self.asr.decode_stream(stream); return stream.result.text.strip()
+
+    def is_voiced(self, speaker: str, data: bytes) -> bool:
+        """Treat a packet as speech only when at least 40 ms passes WebRTC VAD."""
+        frame_bytes = VAD_FRAME_SAMPLES * WIDTH
+        speech_frames = 0
+        for offset in range(0, len(data) - frame_bytes + 1, frame_bytes):
+            if self.vad[speaker].is_speech(data[offset:offset + frame_bytes], RATE):
+                speech_frames += 1
+                if speech_frames >= 2:
+                    return True
+        return False
 
     def rejection_reason(self, speaker: str, text: str, voiced_seconds: float) -> str | None:
         compact = re.sub(r"\s+", "", text)
@@ -107,14 +122,13 @@ async def ws(websocket: WebSocket) -> None:
             if len(session.audio[speaker]) > MAX_BUFFER_BYTES:
                 del session.audio[speaker][:-MAX_BUFFER_BYTES]
                 await websocket.send_json({"type":"diagnostic", "detail":f"ASR buffer capped: {speaker}"})
-            level = float(np.sqrt(np.mean(np.frombuffer(data, dtype=np.int16).astype(np.float32) ** 2)))
-            # Use integer samples. Repeated 0.1-second floating point additions
-            # can remain infinitesimally below 0.8 and prevent finalization.
-            if level < 180:
-                session.silence_samples[speaker] += samples
-            else:
+            # WebRTC VAD is more selective than an RMS threshold: notification
+            # tones and steady background sound should not keep a segment alive.
+            if session.is_voiced(speaker, data):
                 session.silence_samples[speaker] = 0
                 session.voiced_samples[speaker] += samples
+            else:
+                session.silence_samples[speaker] += samples
             buffered_seconds = len(session.audio[speaker]) / (RATE * WIDTH)
             if (buffered_seconds >= MIN_PARTIAL_AUDIO_SECONDS
                     and time.monotonic() - session.last_partial[speaker] >= PARTIAL_INTERVAL_SECONDS):
@@ -127,6 +141,12 @@ async def ws(websocket: WebSocket) -> None:
                     session.last_rejection[speaker] = ""
                     await websocket.send_json({"type":"partial", "speaker":speaker, "text":text, "timestamp":time.strftime('%H:%M:%S')})
             if session.silence_samples[speaker] >= FINAL_SILENCE_SAMPLES and session.audio[speaker]:
+                # Discard leading non-speech instead of treating it as a turn.
+                # This prevents a quiet connection phase from finalizing before
+                # the first actual spoken frames arrive.
+                if session.voiced_samples[speaker] == 0:
+                    session.audio[speaker].clear(); session.silence_samples[speaker] = 0
+                    continue
                 audio_seconds = len(session.audio[speaker]) / (RATE * WIDTH)
                 if audio_seconds < MIN_FINAL_AUDIO_SECONDS:
                     session.audio[speaker].clear(); session.silence_samples[speaker] = 0; session.voiced_samples[speaker] = 0

@@ -4,3 +4,4 @@ psutil==7.2.2
 sherpa-onnx==1.13.8
 numpy==2.5.4
 pyinstaller==6.17.0
+webrtcvad-wheels==2.0.14.post1

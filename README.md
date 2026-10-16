@@ -45,6 +45,8 @@ python -m server.e2e_test
 
 It sends the model's Japanese test audio using the same WebSocket format as the extension and checks that both a partial and a final result are returned. For a duration-test summary, run `python -m server.report_metrics` after a session.
 
+For a real-time endurance check, run `python -m server.duration_test --seconds 600` while the server is running. Change `600` to `1800` or `3600` for the 30- and 60-minute checks, then run `python -m server.report_metrics` to inspect recognition latency, CPU, and memory.
+
 ## Current acceptance checks
 
 * Both WAV files are mono, 16 kHz, 16-bit PCM and contain the intended separate source.

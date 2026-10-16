@@ -14,11 +14,19 @@ RATE, CHANNELS, WIDTH = 16_000, 1, 2
 class Session:
     def __init__(self) -> None:
         OUT.mkdir(parents=True, exist_ok=True)
-        stamp = time.strftime("%Y%m%d-%H%M%S")
-        self.wav = {speaker: wave.open(str(OUT / f"{stamp}-{speaker}.wav"), "wb") for speaker in ("candidate", "interviewer")}
-        for writer in self.wav.values(): writer.setparams((CHANNELS, WIDTH, RATE, 0, "NONE", "not compressed"))
+        self.stamp = time.strftime("%Y%m%d-%H%M%S")
+        self.wav: dict[str, wave.Wave_write] = {}
         self.sequence = defaultdict(lambda: -1)
         self.started = time.monotonic()
+
+    def write(self, speaker: str, data: bytes) -> None:
+        writer = self.wav.get(speaker)
+        if writer is None:
+            writer = wave.open(str(OUT / f"{self.stamp}-{speaker}.wav"), "wb")
+            writer.setparams((CHANNELS, WIDTH, RATE, 0, "NONE", "not compressed"))
+            self.wav[speaker] = writer
+        writer.writeframesraw(data)
+
     def close(self) -> None:
         for writer in self.wav.values(): writer.close()
 
@@ -40,9 +48,9 @@ async def ws(websocket: WebSocket) -> None:
             data = message.get("bytes")
             if not header or data is None: raise ValueError("PCM frame without header")
             speaker, sequence, samples = header["speaker"], header["sequence"], header["samples"]
-            if speaker not in session.wav or header.get("sampleRate") != RATE or len(data) != samples * WIDTH: raise ValueError(f"invalid frame: {header}")
+            if speaker not in {"candidate", "interviewer"} or header.get("sampleRate") != RATE or len(data) != samples * WIDTH: raise ValueError(f"invalid frame: {header}")
             if sequence <= session.sequence[speaker]: logging.warning("non-monotonic sequence speaker=%s sequence=%s", speaker, sequence)
-            session.sequence[speaker] = sequence; session.wav[speaker].writeframesraw(data)
+            session.sequence[speaker] = sequence; session.write(speaker, data)
             if sequence % 100 == 0:
                 process = psutil.Process(); elapsed = time.monotonic() - session.started
                 logging.info("audio speaker=%s sequence=%d elapsed=%.1fs cpu=%.1f rss=%d", speaker, sequence, elapsed, process.cpu_percent(), process.memory_info().rss)

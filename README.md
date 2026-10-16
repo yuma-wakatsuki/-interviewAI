@@ -1,6 +1,6 @@
 # InterviewAI Transcriber — Phase 1
 
-This is a diagnostic MVP for a Chrome Manifest V3 extension. It captures Google Meet tab audio and the interviewer's microphone separately, converts both to 16 kHz signed PCM, sends framed audio over WebSocket, and writes separate WAV files for inspection. It does not yet perform speech recognition or persist transcripts.
+This is a diagnostic MVP for a Chrome Manifest V3 extension. It captures Google Meet tab audio and the interviewer's microphone separately, converts both to 16 kHz signed PCM, sends framed audio over WebSocket, and writes separate WAV files for inspection. A WAV is created only after that source delivers audio. It does not yet perform speech recognition or persist transcripts.
 
 ## Run the diagnostic server
 

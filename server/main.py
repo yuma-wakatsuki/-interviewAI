@@ -14,6 +14,7 @@ app = FastAPI()
 OUT = Path("diagnostics/audio")
 RATE, CHANNELS, WIDTH = 16_000, 1, 2
 MAX_BUFFER_BYTES = RATE * WIDTH * 15
+MIN_FINAL_AUDIO_SECONDS = 0.6
 MODEL = Path("server/models/sherpa-onnx-zipformer-ja-reazonspeech-2024-08-01")
 
 def recognizer() -> sherpa_onnx.OfflineRecognizer:
@@ -87,6 +88,10 @@ async def ws(websocket: WebSocket) -> None:
                 session.last_partial[speaker] = time.monotonic()
                 if session.acceptable(speaker, text): await websocket.send_json({"type":"partial", "speaker":speaker, "text":text, "timestamp":time.strftime('%H:%M:%S')})
             if session.silence_seconds[speaker] >= 0.8 and session.audio[speaker]:
+                audio_seconds = len(session.audio[speaker]) / (RATE * WIDTH)
+                if audio_seconds < MIN_FINAL_AUDIO_SECONDS:
+                    session.audio[speaker].clear(); session.silence_seconds[speaker] = 0.0
+                    continue
                 started = time.monotonic(); text = await asyncio.wait_for(asyncio.to_thread(session.decode, speaker), timeout=5)
                 record("final_decode", speaker=speaker, elapsed_ms=round((time.monotonic()-started)*1000, 1), audio_seconds=round(len(session.audio[speaker])/(RATE*WIDTH), 3))
                 if session.acceptable(speaker, text):

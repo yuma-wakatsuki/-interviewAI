@@ -2,7 +2,17 @@
 
 This local-first Chrome Manifest V3 extension captures Google Meet tab audio and the interviewer's microphone separately. It converts both to 16 kHz signed PCM, sends 100 ms framed audio over WebSocket, and performs Japanese recognition locally with the Apache-2.0 licensed ReazonSpeech Zipformer model through sherpa-onnx. The side panel distinguishes provisional and final results, and can export final results as TXT. Candidate audio and transcripts are not stored by the server.
 
-## Run the diagnostic server
+## Windows: start the local server
+
+In PowerShell, open this project folder and run the following command. The first run prepares Python packages and downloads the Japanese model; later runs start immediately.
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\start_windows.ps1
+```
+
+Keep this PowerShell window open while using InterviewAI. To update installed Python packages after pulling a newer version from GitHub, add `-Refresh` to the command. For temporary WAV input validation only, add `-DiagnosticWav`.
+
+## Manual server setup
 
 ```bash
 python3 -m venv .venv
@@ -26,7 +36,7 @@ The committed `dist/` folder is a ready-to-load build for Windows users who down
 
 In `chrome://extensions`, enable Developer mode, choose **Load unpacked**, and select `dist/`. With the Google Meet tab selected, click the extension's toolbar icon. This direct action starts Meet capture and opens the side panel. Click **マイクを許可**; a dedicated InterviewAI permission tab opens. Click its button and approve Chrome's prompt to capture interviewer audio. The server writes `diagnostics/audio/*-candidate.wav` and `*-interviewer.wav` while diagnostics are enabled. The side panel shows a speaker's newest provisional result with `…`; it becomes a timestamped final row after silence. **TXT 保存** exports final rows only.
 
-WAV diagnostics are disabled by default so normal interview audio is not retained. To verify audio input during setup, start the server once with diagnostics explicitly enabled:
+WAV diagnostics are disabled by default so normal interview audio is not retained. To verify audio input during setup, either add `-DiagnosticWav` to the Windows start command or start the server once with diagnostics explicitly enabled:
 
 ```bash
 # Windows PowerShell

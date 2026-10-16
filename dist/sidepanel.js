@@ -7,6 +7,9 @@ var stopButton = document.querySelector("#stop");
 var entries = [];
 var partials = /* @__PURE__ */ new Map();
 var diagnostics = [];
+function speakerLabel(speaker) {
+  return speaker === "interviewer" ? "\u9762\u63A5\u5B98" : speaker === "candidate" ? "\u5019\u88DC\u8005" : speaker ?? "";
+}
 async function refreshServerStatus() {
   try {
     const response = await fetch("http://127.0.0.1:8765/health");
@@ -34,7 +37,7 @@ void restoreFinalEntries();
 void refreshServerStatus();
 function render() {
   const finalRows = entries.filter((e) => e.type === "final");
-  transcript.textContent = [...partials.values(), ...finalRows].map((e) => e.type === "partial" ? `${e.speaker}: ${e.text} \u2026` : `[${e.timestamp ?? ""}] ${e.speaker}: ${e.text}`).join("\n");
+  transcript.textContent = [...finalRows, ...partials.values()].map((e) => e.type === "partial" ? `${speakerLabel(e.speaker)}: ${e.text} \u2026` : `[${e.timestamp ?? ""}] ${speakerLabel(e.speaker)}: ${e.text}`).join("\n");
 }
 chrome.runtime.onMessage.addListener((event) => {
   if (!event.type) return;
@@ -76,7 +79,7 @@ stopButton.onclick = async () => {
 };
 document.querySelector("#export").addEventListener("click", () => {
   const rows = entries.filter((e) => e.type === "final");
-  const content = [`InterviewAI transcript`, `Exported: ${(/* @__PURE__ */ new Date()).toLocaleString("ja-JP")}`, "", ...rows.map((e) => `[${e.timestamp}] ${e.speaker}: ${e.text}`)].join("\n");
+  const content = [`InterviewAI transcript`, `Exported: ${(/* @__PURE__ */ new Date()).toLocaleString("ja-JP")}`, "", ...rows.map((e) => `[${e.timestamp}] ${speakerLabel(e.speaker)}: ${e.text}`)].join("\n");
   const url = URL.createObjectURL(new Blob([content], { type: "text/plain;charset=utf-8" }));
   const a = Object.assign(document.createElement("a"), { href: url, download: `interview-${(/* @__PURE__ */ new Date()).toISOString()}.txt` });
   a.click();

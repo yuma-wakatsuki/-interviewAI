@@ -8,6 +8,9 @@ const stopButton = document.querySelector<HTMLButtonElement>('#stop')!;
 let entries: TranscriptEntry[] = [];
 const partials = new Map<string, TranscriptEntry>();
 const diagnostics: string[] = [];
+function speakerLabel(speaker?: string) {
+  return speaker === 'interviewer' ? '面接官' : speaker === 'candidate' ? '候補者' : speaker ?? '';
+}
 async function refreshServerStatus() {
   try {
     const response = await fetch('http://127.0.0.1:8765/health');
@@ -36,7 +39,10 @@ void restoreFinalEntries();
 void refreshServerStatus();
 function render() {
   const finalRows = entries.filter(e => e.type === 'final');
-  transcript.textContent = [...partials.values(), ...finalRows].map(e => e.type === 'partial' ? `${e.speaker}: ${e.text} …` : `[${e.timestamp ?? ''}] ${e.speaker}: ${e.text}`).join('\n');
+  transcript.textContent = [...finalRows, ...partials.values()].map(e =>
+    e.type === 'partial'
+      ? `${speakerLabel(e.speaker)}: ${e.text} …`
+      : `[${e.timestamp ?? ''}] ${speakerLabel(e.speaker)}: ${e.text}`).join('\n');
 }
 chrome.runtime.onMessage.addListener((event: TranscriptEntry) => {
   if (!event.type) return;
@@ -73,4 +79,4 @@ stopButton.onclick = async () => {
   await chrome.runtime.sendMessage({ type: 'offscreen-stop' });
   statusEl.textContent = '停止しました';
 };
-document.querySelector('#export')!.addEventListener('click', () => { const rows = entries.filter(e => e.type === 'final'); const content = [`InterviewAI transcript`, `Exported: ${new Date().toLocaleString('ja-JP')}`, '', ...rows.map(e => `[${e.timestamp}] ${e.speaker}: ${e.text}`)].join('\n'); const url = URL.createObjectURL(new Blob([content], { type: 'text/plain;charset=utf-8' })); const a = Object.assign(document.createElement('a'), { href: url, download: `interview-${new Date().toISOString()}.txt` }); a.click(); URL.revokeObjectURL(url); });
+document.querySelector('#export')!.addEventListener('click', () => { const rows = entries.filter(e => e.type === 'final'); const content = [`InterviewAI transcript`, `Exported: ${new Date().toLocaleString('ja-JP')}`, '', ...rows.map(e => `[${e.timestamp}] ${speakerLabel(e.speaker)}: ${e.text}`)].join('\n'); const url = URL.createObjectURL(new Blob([content], { type: 'text/plain;charset=utf-8' })); const a = Object.assign(document.createElement('a'), { href: url, download: `interview-${new Date().toISOString()}.txt` }); a.click(); URL.revokeObjectURL(url); });

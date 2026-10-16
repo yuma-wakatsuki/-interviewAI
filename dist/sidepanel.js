@@ -39,6 +39,7 @@ void refreshServerStatus();
 function render() {
   const finalRows = entries.filter((e) => e.type === "final");
   transcript.textContent = [...finalRows, ...partials.values()].map((e) => e.type === "partial" ? `${speakerLabel(e.speaker)}: ${e.text} \u2026` : `[${e.timestamp ?? ""}] ${speakerLabel(e.speaker)}: ${e.text}`).join("\n");
+  transcript.scrollTop = transcript.scrollHeight;
 }
 function renderDiagnostics() {
   diagnosticsEl.textContent = diagnostics.map((detail) => `[\u8A3A\u65AD] ${detail}`).join("\n");

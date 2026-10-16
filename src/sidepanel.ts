@@ -44,6 +44,7 @@ function render() {
     e.type === 'partial'
       ? `${speakerLabel(e.speaker)}: ${e.text} …`
       : `[${e.timestamp ?? ''}] ${speakerLabel(e.speaker)}: ${e.text}`).join('\n');
+  transcript.scrollTop = transcript.scrollHeight;
 }
 function renderDiagnostics() { diagnosticsEl.textContent = diagnostics.map(detail => `[診断] ${detail}`).join('\n'); }
 chrome.runtime.onMessage.addListener((event: TranscriptEntry) => {

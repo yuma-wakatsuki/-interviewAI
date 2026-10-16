@@ -27,6 +27,8 @@ class Session:
         self.asr = recognizer() if MODEL.exists() else None
         self.audio = defaultdict(bytearray)
         self.last_partial = defaultdict(float)
+        self.last_audio = defaultdict(time.monotonic)
+        self.final_text = defaultdict(str)
 
     def write(self, speaker: str, data: bytes) -> None:
         writer = self.wav.get(speaker)
@@ -65,6 +67,7 @@ async def ws(websocket: WebSocket) -> None:
             if sequence <= session.sequence[speaker]: logging.warning("non-monotonic sequence speaker=%s sequence=%s", speaker, sequence)
             session.sequence[speaker] = sequence; session.write(speaker, data)
             session.audio[speaker].extend(data)
+            session.last_audio[speaker] = time.monotonic()
             if time.monotonic() - session.last_partial[speaker] >= 1.0:
                 text = await asyncio.to_thread(session.decode, speaker)
                 session.last_partial[speaker] = time.monotonic()

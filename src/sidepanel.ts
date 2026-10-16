@@ -8,6 +8,7 @@ const stopButton = document.querySelector<HTMLButtonElement>('#stop')!;
 const entries: TranscriptEntry[] = [];
 function render() { transcript.textContent = entries.map(e => e.type === 'diagnostic' ? `[診断] ${e.detail}` : `[${e.timestamp ?? ''}] ${e.speaker}: ${e.text}${e.type === 'partial' ? ' …' : ''}`).join('\n'); }
 chrome.runtime.onMessage.addListener((event: TranscriptEntry) => {
+  if (!event.type) return;
   entries.push(event); render();
   if (event.type === 'diagnostic' && event.detail?.includes('Meet audio capture started')) statusEl.textContent = 'Meet 音声を録音中です。次に「マイクを許可」を押してください。';
   if (event.type === 'diagnostic' && event.detail?.includes('Interviewer microphone capture started')) statusEl.textContent = 'Meet 音声とマイクを録音中です。';

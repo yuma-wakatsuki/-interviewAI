@@ -9,6 +9,7 @@ function render() {
   transcript.textContent = entries.map((e) => e.type === "diagnostic" ? `[\u8A3A\u65AD] ${e.detail}` : `[${e.timestamp ?? ""}] ${e.speaker}: ${e.text}${e.type === "partial" ? " \u2026" : ""}`).join("\n");
 }
 chrome.runtime.onMessage.addListener((event) => {
+  if (!event.type) return;
   entries.push(event);
   render();
   if (event.type === "diagnostic" && event.detail?.includes("Meet audio capture started")) statusEl.textContent = "Meet \u97F3\u58F0\u3092\u9332\u97F3\u4E2D\u3067\u3059\u3002\u6B21\u306B\u300C\u30DE\u30A4\u30AF\u3092\u8A31\u53EF\u300D\u3092\u62BC\u3057\u3066\u304F\u3060\u3055\u3044\u3002";

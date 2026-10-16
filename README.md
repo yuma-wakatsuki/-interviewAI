@@ -8,6 +8,7 @@ This is a diagnostic MVP for a Chrome Manifest V3 extension. It captures Google 
 python3 -m venv .venv
 . .venv/bin/activate
 pip install -r server/requirements.txt
+python -m server.download_model
 uvicorn server.main:app --host 127.0.0.1 --port 8765
 ```
 

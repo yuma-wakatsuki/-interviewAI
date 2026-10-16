@@ -19,20 +19,8 @@ start.onclick = async () => {
   statusEl.textContent = "Google Meet \u306E\u30BF\u30D6\u3092\u9078\u3073\u3001Chrome\u53F3\u4E0A\u306E\u62E1\u5F35\u6A5F\u80FD\u30A2\u30A4\u30B3\u30F3\u3092\u30AF\u30EA\u30C3\u30AF\u3057\u3066\u958B\u59CB\u3057\u3066\u304F\u3060\u3055\u3044\u3002";
 };
 grantMic.onclick = async () => {
-  try {
-    const granted = await chrome.permissions.request({
-      // audioCapture is valid in the Chrome manifest but is missing from the
-      // current @types/chrome union.
-      permissions: ["audioCapture"]
-    });
-    if (!granted) throw new Error("Chrome \u306E\u30DE\u30A4\u30AF\u5229\u7528\u304C\u8A31\u53EF\u3055\u308C\u307E\u305B\u3093\u3067\u3057\u305F\u3002");
-    const permissionStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
-    permissionStream.getTracks().forEach((track) => track.stop());
-    const result = await chrome.runtime.sendMessage({ type: "offscreen-start-mic" });
-    statusEl.textContent = result.ok ? "\u30DE\u30A4\u30AF\u3092\u63A5\u7D9A\u3057\u3066\u3044\u307E\u3059\u3002" : `\u30DE\u30A4\u30AF\u958B\u59CB\u5931\u6557: ${result.error}`;
-  } catch (error) {
-    statusEl.textContent = `\u30DE\u30A4\u30AF\u8A31\u53EF\u5931\u6557: ${String(error)}`;
-  }
+  await chrome.tabs.create({ url: chrome.runtime.getURL("microphone.html") });
+  statusEl.textContent = "\u958B\u3044\u305F\u300CInterviewAI \u306E\u30DE\u30A4\u30AF\u8A31\u53EF\u300D\u30BF\u30D6\u3067\u3001\u30DE\u30A4\u30AF\u3092\u8A31\u53EF\u3057\u3066\u304F\u3060\u3055\u3044\u3002";
 };
 stopButton.onclick = async () => {
   await chrome.runtime.sendMessage({ type: "offscreen-stop" });

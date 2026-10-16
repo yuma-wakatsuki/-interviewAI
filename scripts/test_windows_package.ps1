@@ -7,9 +7,13 @@ param(
 $ErrorActionPreference = 'Stop'
 $exeDirectory = Join-Path $ReleaseRoot 'InterviewAI-Local'
 $exe = Join-Path $exeDirectory 'InterviewAI-Local.exe'
+$nativeHost = Join-Path $exeDirectory 'InterviewAI-NativeHost.exe'
+$installer = Join-Path $ReleaseRoot 'Install-InterviewAI.exe'
 $manifest = Join-Path $ReleaseRoot 'InterviewAI-Chrome-Extension\manifest.json'
 
 if (-not (Test-Path $exe)) { throw "Package executable was not created: $exe" }
+if (-not (Test-Path $nativeHost)) { throw "Native Messaging executable was not created: $nativeHost" }
+if (-not (Test-Path $installer)) { throw "Installer executable was not created: $installer" }
 if (-not (Test-Path $manifest)) { throw "Extension manifest was not copied: $manifest" }
 
 $manifestJson = Get-Content -Raw -Path $manifest | ConvertFrom-Json

@@ -20,6 +20,17 @@ if (-not (Test-Path (Join-Path $modelPath 'encoder-epoch-99-avg-1.int8.onnx'))) 
   --distpath $releaseRoot --workpath (Join-Path $projectRoot 'build') --specpath (Join-Path $projectRoot 'build') `
   server/launch.py
 
+$serverRelease = Join-Path $releaseRoot 'InterviewAI-Local'
+& $python -m PyInstaller --noconfirm --clean --onefile --name InterviewAI-NativeHost `
+  --distpath $releaseRoot --workpath (Join-Path $projectRoot 'build\native-host') --specpath (Join-Path $projectRoot 'build\native-host') `
+  server/native_host.py
+Move-Item (Join-Path $releaseRoot 'InterviewAI-NativeHost.exe') $serverRelease -Force
+& $python -m server.native_host_smoke_test --exe (Join-Path $serverRelease 'InterviewAI-NativeHost.exe')
+
+& $python -m PyInstaller --noconfirm --clean --onefile --windowed --name Install-InterviewAI `
+  --distpath $releaseRoot --workpath (Join-Path $projectRoot 'build\installer') --specpath (Join-Path $projectRoot 'build\installer') `
+  server/installer.py
+
 $extensionRelease = Join-Path $releaseRoot 'InterviewAI-Chrome-Extension'
 Remove-Item $extensionRelease -Recurse -Force -ErrorAction SilentlyContinue
 Copy-Item (Join-Path $projectRoot 'dist') $extensionRelease -Recurse
@@ -40,14 +51,14 @@ No Python, Node.js, or separate Japanese speech model installation is required.
 
 First-time setup
 1. Extract this ZIP to a local folder. Do not run it from inside the ZIP.
-2. Double-click Start-InterviewAI.cmd and leave the server window running.
+2. Double-click Install-InterviewAI.exe once.
 3. In Chrome, open chrome://extensions and enable Developer mode.
 4. Click Load unpacked and choose the InterviewAI-Chrome-Extension folder.
 5. Open a Google Meet tab, click the InterviewAI toolbar icon, and grant microphone permission once.
 
 Daily use
-1. Double-click Start-InterviewAI.cmd.
-2. Join Google Meet and click the InterviewAI toolbar icon.
+1. Join Google Meet and click the InterviewAI toolbar icon.
+2. The local recognition server starts automatically and stops when InterviewAI stops.
 
 Audio recognition runs locally. The server does not retain interview audio or transcripts.
 "@
@@ -60,6 +71,7 @@ Remove-Item $archive -Force -ErrorAction SilentlyContinue
 $packageFiles = @(
   (Join-Path $releaseRoot 'InterviewAI-Local'),
   $extensionRelease,
+  (Join-Path $releaseRoot 'Install-InterviewAI.exe'),
   (Join-Path $releaseRoot 'licenses.md'),
   (Join-Path $releaseRoot 'README.txt'),
   (Join-Path $releaseRoot 'Start-InterviewAI.cmd')

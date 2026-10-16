@@ -17,12 +17,12 @@ async function refreshServerStatus() {
     const response = await fetch('http://127.0.0.1:8765/health');
     const health = await response.json() as { status?: string; model_available?: boolean };
     if (health.status === 'ok' && health.model_available) {
-      statusEl.textContent = 'ローカル認識サーバーの準備ができました。Meet タブで拡張機能アイコンをクリックしてください。';
+      statusEl.textContent = '準備ができました。Meet タブで拡張機能アイコンをクリックしてください。';
     } else {
-      statusEl.textContent = '日本語認識モデルの準備ができていません。scripts\\start_windows.ps1 を実行してください。';
+      statusEl.textContent = '認識サーバーの準備ができていません。';
     }
   } catch {
-    statusEl.textContent = 'ローカル認識サーバーが起動していません。scripts\\start_windows.ps1 を実行してください。';
+    statusEl.textContent = 'Meet タブで拡張機能アイコンをクリックすると、認識サーバーを自動起動します。';
   }
 }
 async function saveFinalEntries() {

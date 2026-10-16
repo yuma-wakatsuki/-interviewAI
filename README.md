@@ -57,6 +57,8 @@ It sends the model's Japanese test audio using the same WebSocket format as the 
 
 For a real-time endurance check, run `python -m server.duration_test --seconds 600` while the server is running. Change `600` to `1800` or `3600` for the 30- and 60-minute checks. Its final output contains recognition latency, CPU, and memory for that test only.
 
+Add `--two-speakers` to send separate candidate and interviewer test audio concurrently.
+
 The first 10-minute protocol result is recorded in [docs/performance.md](docs/performance.md).
 
 ## Current acceptance checks

@@ -21,12 +21,17 @@ MIN_PARTIAL_AUDIO_SECONDS = 0.8
 PARTIAL_INTERVAL_SECONDS = 1.0
 MIN_FINAL_AUDIO_SECONDS = 0.6
 MIN_MEANINGFUL_VOICE_SECONDS = 1.0
+MIN_FINAL_VOICE_SECONDS = 1.5
+MIN_FINAL_TEXT_CHARS = 2
 FINAL_SILENCE_SAMPLES = int(RATE * 0.8)
 # PyInstaller exposes bundled files in _MEIPASS. Source execution continues to
 # resolve models from the repository root.
 RUNTIME_ROOT = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parents[1]))
 MODEL = RUNTIME_ROOT / "server" / "models" / "sherpa-onnx-zipformer-ja-reazonspeech-2024-08-01"
-LOW_INFORMATION_RESULTS = {"え", "えっ", "えー", "あ", "あっ", "あー", "うん", "ん", "はい", "何", "なに", "ピッ", "フッ", "おっ", "いい", "うんうん"}
+LOW_INFORMATION_RESULTS = {
+    "え", "えっ", "えー", "あ", "あっ", "あー", "うん", "ん", "はい", "何", "なに",
+    "ピッ", "フッ", "フワ", "ふわ", "おっ", "いい", "うんうん",
+}
 VAD_FRAME_SAMPLES = RATE // 50  # 20 ms, a WebRTC VAD-supported duration
 VAD_MODE = 2  # Balanced rejection of noise without the most aggressive speech loss
 
@@ -77,13 +82,15 @@ class Session:
                     return True
         return False
 
-    def rejection_reason(self, speaker: str, text: str, voiced_seconds: float) -> str | None:
+    def rejection_reason(self, speaker: str, text: str, voiced_seconds: float, *, is_final: bool) -> str | None:
         compact = re.sub(r"\s+", "", text)
         if not compact: return "empty recognition result"
         if compact in LOW_INFORMATION_RESULTS: return "low-information acknowledgement or noise"
         if voiced_seconds < MIN_MEANINGFUL_VOICE_SECONDS: return "voice segment shorter than 1.0 second"
+        if is_final and len(compact) < MIN_FINAL_TEXT_CHARS: return "single-character final result"
+        if is_final and voiced_seconds < MIN_FINAL_VOICE_SECONDS: return "final voice segment shorter than 1.5 seconds"
         if re.search(r"(.)\1{7,}", compact): return "repeated-character recognition result"
-        if compact == re.sub(r"\s+", "", self.final_text[speaker]): return "duplicate final recognition result"
+        if is_final and compact == re.sub(r"\s+", "", self.final_text[speaker]): return "duplicate final recognition result"
         return None
 
     async def report_rejection(self, websocket: WebSocket, speaker: str, text: str, reason: str) -> None:
@@ -138,7 +145,7 @@ async def ws(websocket: WebSocket) -> None:
                 started = time.monotonic(); text = await asyncio.wait_for(asyncio.to_thread(session.decode, speaker), timeout=5)
                 record("partial_decode", speaker=speaker, elapsed_ms=round((time.monotonic()-started)*1000, 1), audio_seconds=round(len(session.audio[speaker])/(RATE*WIDTH), 3))
                 session.last_partial[speaker] = time.monotonic()
-                reason = session.rejection_reason(speaker, text, session.voiced_samples[speaker] / RATE)
+                reason = session.rejection_reason(speaker, text, session.voiced_samples[speaker] / RATE, is_final=False)
                 if reason: await session.report_rejection(websocket, speaker, text, reason)
                 else:
                     session.last_rejection[speaker] = ""
@@ -156,7 +163,7 @@ async def ws(websocket: WebSocket) -> None:
                     continue
                 started = time.monotonic(); text = await asyncio.wait_for(asyncio.to_thread(session.decode, speaker), timeout=5)
                 record("final_decode", speaker=speaker, elapsed_ms=round((time.monotonic()-started)*1000, 1), audio_seconds=round(len(session.audio[speaker])/(RATE*WIDTH), 3))
-                reason = session.rejection_reason(speaker, text, session.voiced_samples[speaker] / RATE)
+                reason = session.rejection_reason(speaker, text, session.voiced_samples[speaker] / RATE, is_final=True)
                 if reason:
                     await session.report_rejection(websocket, speaker, text, reason)
                 else:

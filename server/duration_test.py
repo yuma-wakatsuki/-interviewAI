@@ -18,6 +18,7 @@ from collections import Counter
 from pathlib import Path
 
 import websockets
+from server.report_metrics import summarize
 
 ROOT = Path(__file__).resolve().parent
 WAV = ROOT / "models" / "sherpa-onnx-zipformer-ja-reazonspeech-2024-08-01" / "test_wavs" / "1.wav"
@@ -38,6 +39,7 @@ async def run(seconds: int, url: str) -> None:
     packet_bytes = 16000 // 10 * 2
     received: Counter[str] = Counter()
     started = time.monotonic()
+    metrics_started = time.time()
     async with websockets.connect(url, max_size=2**23) as ws:
         async def receive() -> None:
             while True:
@@ -73,7 +75,8 @@ async def run(seconds: int, url: str) -> None:
     elapsed = round(time.monotonic() - started, 1)
     if received["partial"] == 0 or received["final"] == 0:
         raise SystemExit(f"Endurance check failed after {elapsed}s: {dict(received)}")
-    print(json.dumps({"result": "PASS", "elapsed_seconds": elapsed, "messages": dict(received)}, ensure_ascii=False))
+    print(json.dumps({"result": "PASS", "elapsed_seconds": elapsed, "messages": dict(received),
+                      "metrics": summarize(metrics_started)}, ensure_ascii=False))
 
 
 def main() -> None:
@@ -81,8 +84,8 @@ def main() -> None:
     parser.add_argument("--seconds", type=int, default=60)
     parser.add_argument("--url", default=os.environ.get("INTERVIEWAI_WS_URL", "ws://127.0.0.1:8765/ws"))
     args = parser.parse_args()
-    if args.seconds < 10:
-        raise SystemExit("--seconds must be at least 10")
+    if args.seconds < 20:
+        raise SystemExit("--seconds must be at least 20 so a completed speech turn can be measured")
     asyncio.run(run(args.seconds, args.url))
 
 

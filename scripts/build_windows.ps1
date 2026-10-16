@@ -13,7 +13,8 @@ if (-not (Test-Path $python)) { throw 'Run scripts\start_windows.ps1 once before
 if (-not (Test-Path (Join-Path $modelPath 'encoder-epoch-99-avg-1.int8.onnx'))) { throw 'Japanese ASR model is missing. Run scripts\start_windows.ps1 first.' }
 
 & $python -m PyInstaller --noconfirm --clean --onedir --name InterviewAI-Local `
-  --collect-all sherpa_onnx --collect-all webrtcvad --collect-all numpy `
+  --collect-all sherpa_onnx --collect-all numpy `
+  --additional-hooks-dir (Join-Path $PSScriptRoot 'pyinstaller-hooks') `
   --add-data "$modelPath;server/models/$modelName" `
   --distpath $releaseRoot --workpath (Join-Path $projectRoot 'build') --specpath (Join-Path $projectRoot 'build') `
   server/launch.py

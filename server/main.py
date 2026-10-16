@@ -6,6 +6,7 @@ from typing import Any
 import numpy as np
 import psutil
 import sherpa_onnx
+from server.metrics import record
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -60,6 +61,7 @@ def health() -> dict[str, Any]:
 @app.websocket("/ws")
 async def ws(websocket: WebSocket) -> None:
     await websocket.accept(); session = Session(); header: dict[str, Any] | None = None
+    record("session_start")
     try:
         while True:
             message = await asyncio.wait_for(websocket.receive(), timeout=20)
@@ -98,3 +100,4 @@ async def ws(websocket: WebSocket) -> None:
         logging.exception("session error")
         await websocket.send_json({"type":"diagnostic", "detail":f"server error: {error}"})
     finally: session.close()
+    record("session_end", seconds=round(time.monotonic()-session.started, 3))

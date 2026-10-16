@@ -6,18 +6,12 @@ async function ensureOffscreen() {
   if (!contexts.length) await chrome.offscreen.createDocument({ url: 'offscreen.html', reasons: [chrome.offscreen.Reason.USER_MEDIA], justification: 'Capture and process interview audio in AudioWorklet' });
 }
 
-chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (message.type === 'start') {
     (async () => {
       await ensureOffscreen();
-      const targetTabId = sender.tab?.id ?? message.tabId;
-      if (!targetTabId) throw new Error('対象タブを特定できません。Google Meet タブから開始してください。');
-      const streamId = await new Promise<string>((resolve, reject) =>
-        chrome.tabCapture.getMediaStreamId({ targetTabId }, id => {
-          const error = chrome.runtime.lastError;
-          if (error) reject(new Error(error.message)); else resolve(id);
-        }));
-      await chrome.runtime.sendMessage({ type: 'offscreen-start', streamId });
+      if (!message.streamId) throw new Error('Meet タブの音声取得 ID がありません。Meet タブで開始してください。');
+      await chrome.runtime.sendMessage({ type: 'offscreen-start', streamId: message.streamId });
       sendResponse({ ok: true });
     })().catch(error => sendResponse({ ok: false, error: String(error) }));
     return true;

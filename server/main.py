@@ -82,11 +82,13 @@ async def ws(websocket: WebSocket) -> None:
             level = float(np.sqrt(np.mean(np.frombuffer(data, dtype=np.int16).astype(np.float32) ** 2)))
             session.silence_seconds[speaker] = session.silence_seconds[speaker] + samples / RATE if level < 180 else 0.0
             if time.monotonic() - session.last_partial[speaker] >= 1.0:
-                text = await asyncio.wait_for(asyncio.to_thread(session.decode, speaker), timeout=5)
+                started = time.monotonic(); text = await asyncio.wait_for(asyncio.to_thread(session.decode, speaker), timeout=5)
+                record("partial_decode", speaker=speaker, elapsed_ms=round((time.monotonic()-started)*1000, 1), audio_seconds=round(len(session.audio[speaker])/(RATE*WIDTH), 3))
                 session.last_partial[speaker] = time.monotonic()
                 if session.acceptable(speaker, text): await websocket.send_json({"type":"partial", "speaker":speaker, "text":text, "timestamp":time.strftime('%H:%M:%S')})
             if session.silence_seconds[speaker] >= 0.8 and session.audio[speaker]:
-                text = await asyncio.wait_for(asyncio.to_thread(session.decode, speaker), timeout=5)
+                started = time.monotonic(); text = await asyncio.wait_for(asyncio.to_thread(session.decode, speaker), timeout=5)
+                record("final_decode", speaker=speaker, elapsed_ms=round((time.monotonic()-started)*1000, 1), audio_seconds=round(len(session.audio[speaker])/(RATE*WIDTH), 3))
                 if session.acceptable(speaker, text):
                     session.final_text[speaker] = text
                     await websocket.send_json({"type":"final", "speaker":speaker, "text":text, "timestamp":time.strftime('%H:%M:%S')})

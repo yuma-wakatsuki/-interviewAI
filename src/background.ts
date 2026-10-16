@@ -8,8 +8,21 @@ async function ensureOffscreen() {
   if (!contexts.length) await chrome.offscreen.createDocument({ url: 'offscreen.html', reasons: [chrome.offscreen.Reason.USER_MEDIA], justification: 'Capture and process interview audio in AudioWorklet' });
 }
 
+async function checkLocalServer() {
+  let response: Response;
+  try {
+    response = await fetch('http://127.0.0.1:8765/health');
+  } catch {
+    throw new Error('ローカル認識サーバーに接続できません。PowerShell で scripts\\start_windows.ps1 を起動してから、もう一度お試しください。');
+  }
+  if (!response.ok) throw new Error('ローカル認識サーバーの状態確認に失敗しました。');
+  const health = await response.json() as { model_available?: boolean };
+  if (!health.model_available) throw new Error('日本語認識モデルが準備されていません。scripts\\start_windows.ps1 を再実行してください。');
+}
+
 async function startFromAction(tab: chrome.tabs.Tab) {
   if (!tab.id) throw new Error('Google Meet のタブを選んでから拡張機能アイコンをクリックしてください。');
+  await checkLocalServer();
   const streamId = await new Promise<string>((resolve, reject) =>
     chrome.tabCapture.getMediaStreamId({ targetTabId: tab.id! }, id => {
       const error = chrome.runtime.lastError;

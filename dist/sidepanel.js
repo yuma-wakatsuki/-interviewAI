@@ -7,6 +7,20 @@ var stopButton = document.querySelector("#stop");
 var entries = [];
 var partials = /* @__PURE__ */ new Map();
 var diagnostics = [];
+async function refreshServerStatus() {
+  try {
+    const response = await fetch("http://127.0.0.1:8765/health");
+    const health = await response.json();
+    if (health.status === "ok" && health.model_available) {
+      statusEl.textContent = "\u30ED\u30FC\u30AB\u30EB\u8A8D\u8B58\u30B5\u30FC\u30D0\u30FC\u306E\u6E96\u5099\u304C\u3067\u304D\u307E\u3057\u305F\u3002Meet \u30BF\u30D6\u3067\u62E1\u5F35\u6A5F\u80FD\u30A2\u30A4\u30B3\u30F3\u3092\u30AF\u30EA\u30C3\u30AF\u3057\u3066\u304F\u3060\u3055\u3044\u3002";
+    } else {
+      statusEl.textContent = "\u65E5\u672C\u8A9E\u8A8D\u8B58\u30E2\u30C7\u30EB\u306E\u6E96\u5099\u304C\u3067\u304D\u3066\u3044\u307E\u305B\u3093\u3002scripts\\start_windows.ps1 \u3092\u5B9F\u884C\u3057\u3066\u304F\u3060\u3055\u3044\u3002";
+    }
+  } catch {
+    statusEl.textContent = "\u30ED\u30FC\u30AB\u30EB\u8A8D\u8B58\u30B5\u30FC\u30D0\u30FC\u304C\u8D77\u52D5\u3057\u3066\u3044\u307E\u305B\u3093\u3002scripts\\start_windows.ps1 \u3092\u5B9F\u884C\u3057\u3066\u304F\u3060\u3055\u3044\u3002";
+  }
+}
+void refreshServerStatus();
 function render() {
   const finalRows = entries.filter((e) => e.type === "final");
   transcript.textContent = [...partials.values(), ...finalRows].map((e) => e.type === "partial" ? `${e.speaker}: ${e.text} \u2026` : `[${e.timestamp ?? ""}] ${e.speaker}: ${e.text}`).join("\n");

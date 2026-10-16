@@ -8,6 +8,20 @@ const stopButton = document.querySelector<HTMLButtonElement>('#stop')!;
 const entries: TranscriptEntry[] = [];
 const partials = new Map<string, TranscriptEntry>();
 const diagnostics: string[] = [];
+async function refreshServerStatus() {
+  try {
+    const response = await fetch('http://127.0.0.1:8765/health');
+    const health = await response.json() as { status?: string; model_available?: boolean };
+    if (health.status === 'ok' && health.model_available) {
+      statusEl.textContent = 'ローカル認識サーバーの準備ができました。Meet タブで拡張機能アイコンをクリックしてください。';
+    } else {
+      statusEl.textContent = '日本語認識モデルの準備ができていません。scripts\\start_windows.ps1 を実行してください。';
+    }
+  } catch {
+    statusEl.textContent = 'ローカル認識サーバーが起動していません。scripts\\start_windows.ps1 を実行してください。';
+  }
+}
+void refreshServerStatus();
 function render() {
   const finalRows = entries.filter(e => e.type === 'final');
   transcript.textContent = [...partials.values(), ...finalRows].map(e => e.type === 'partial' ? `${e.speaker}: ${e.text} …` : `[${e.timestamp ?? ''}] ${e.speaker}: ${e.text}`).join('\n');

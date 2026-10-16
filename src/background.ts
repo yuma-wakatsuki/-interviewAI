@@ -18,12 +18,13 @@ async function startFromAction(tab: chrome.tabs.Tab) {
   await ensureOffscreen();
   const result = await chrome.runtime.sendMessage({ type: 'offscreen-start', streamId });
   if (!result?.ok) throw new Error(result?.error ?? '音声取得を開始できませんでした。');
-  await chrome.sidePanel.open({ tabId: tab.id });
 }
 
 chrome.action.onClicked.addListener(tab => {
+  // sidePanel.open must run immediately within the toolbar-click gesture.
+  // Awaiting tab capture first makes Chrome reject the panel request.
+  if (tab.id) chrome.sidePanel.open({ tabId: tab.id }).catch(() => undefined);
   startFromAction(tab).catch(async error => {
-    if (tab.id) await chrome.sidePanel.open({ tabId: tab.id }).catch(() => undefined);
     chrome.runtime.sendMessage({ type: 'diagnostic', detail: `開始失敗: ${String(error)}` }).catch(() => undefined);
   });
 });

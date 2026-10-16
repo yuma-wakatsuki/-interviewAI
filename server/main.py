@@ -1,5 +1,5 @@
 """Phase 1 diagnostic server: validates PCM frames and writes separate WAV files; no transcript is persisted."""
-import asyncio, json, logging, struct, time, wave
+import asyncio, json, logging, re, struct, time, wave
 from collections import defaultdict
 from pathlib import Path
 from typing import Any
@@ -12,6 +12,7 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(mess
 app = FastAPI()
 OUT = Path("diagnostics/audio")
 RATE, CHANNELS, WIDTH = 16_000, 1, 2
+MAX_BUFFER_BYTES = RATE * WIDTH * 15
 MODEL = Path("server/models/sherpa-onnx-zipformer-ja-reazonspeech-2024-08-01")
 
 def recognizer() -> sherpa_onnx.OfflineRecognizer:
@@ -46,6 +47,11 @@ class Session:
         if not self.asr or not self.audio[speaker]: return ""
         stream = self.asr.create_stream(); stream.accept_waveform(RATE, np.frombuffer(self.audio[speaker], dtype=np.int16).astype(np.float32)/32768); self.asr.decode_stream(stream); return stream.result.text.strip()
 
+    def acceptable(self, speaker: str, text: str) -> bool:
+        compact = re.sub(r"\s+", "", text)
+        if not compact or re.search(r"(.)\1{7,}", compact): return False
+        return compact != re.sub(r"\s+", "", self.final_text[speaker])
+
 @app.get("/health")
 def health() -> dict[str, Any]:
     process = psutil.Process()
@@ -68,15 +74,18 @@ async def ws(websocket: WebSocket) -> None:
             if sequence <= session.sequence[speaker]: logging.warning("non-monotonic sequence speaker=%s sequence=%s", speaker, sequence)
             session.sequence[speaker] = sequence; session.write(speaker, data)
             session.audio[speaker].extend(data)
+            if len(session.audio[speaker]) > MAX_BUFFER_BYTES:
+                del session.audio[speaker][:-MAX_BUFFER_BYTES]
+                await websocket.send_json({"type":"diagnostic", "detail":f"ASR buffer capped: {speaker}"})
             level = float(np.sqrt(np.mean(np.frombuffer(data, dtype=np.int16).astype(np.float32) ** 2)))
             session.silence_seconds[speaker] = session.silence_seconds[speaker] + samples / RATE if level < 180 else 0.0
             if time.monotonic() - session.last_partial[speaker] >= 1.0:
-                text = await asyncio.to_thread(session.decode, speaker)
+                text = await asyncio.wait_for(asyncio.to_thread(session.decode, speaker), timeout=5)
                 session.last_partial[speaker] = time.monotonic()
-                if text: await websocket.send_json({"type":"partial", "speaker":speaker, "text":text, "timestamp":time.strftime('%H:%M:%S')})
+                if session.acceptable(speaker, text): await websocket.send_json({"type":"partial", "speaker":speaker, "text":text, "timestamp":time.strftime('%H:%M:%S')})
             if session.silence_seconds[speaker] >= 0.8 and session.audio[speaker]:
-                text = await asyncio.to_thread(session.decode, speaker)
-                if text and text != session.final_text[speaker]:
+                text = await asyncio.wait_for(asyncio.to_thread(session.decode, speaker), timeout=5)
+                if session.acceptable(speaker, text):
                     session.final_text[speaker] = text
                     await websocket.send_json({"type":"final", "speaker":speaker, "text":text, "timestamp":time.strftime('%H:%M:%S')})
                 session.audio[speaker].clear(); session.silence_seconds[speaker] = 0.0

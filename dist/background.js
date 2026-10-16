@@ -18,6 +18,8 @@ async function checkLocalServer() {
 async function startFromAction(tab) {
   if (!tab.id) throw new Error("Google Meet \u306E\u30BF\u30D6\u3092\u9078\u3093\u3067\u304B\u3089\u62E1\u5F35\u6A5F\u80FD\u30A2\u30A4\u30B3\u30F3\u3092\u30AF\u30EA\u30C3\u30AF\u3057\u3066\u304F\u3060\u3055\u3044\u3002");
   await checkLocalServer();
+  await chrome.storage.session.set({ transcriptEntries: [] });
+  chrome.runtime.sendMessage({ type: "transcript-reset" }).catch(() => void 0);
   const streamId = await new Promise((resolve, reject) => chrome.tabCapture.getMediaStreamId({ targetTabId: tab.id }, (id) => {
     const error = chrome.runtime.lastError;
     if (error) reject(new Error(error.message));

@@ -23,6 +23,11 @@ async function checkLocalServer() {
 async function startFromAction(tab: chrome.tabs.Tab) {
   if (!tab.id) throw new Error('Google Meet のタブを選んでから拡張機能アイコンをクリックしてください。');
   await checkLocalServer();
+  // A toolbar click begins a new interview capture. Final rows are stored in
+  // session storage so closing the side panel does not lose them, but must not
+  // leak into the next interview.
+  await chrome.storage.session.set({ transcriptEntries: [] });
+  chrome.runtime.sendMessage({ type: 'transcript-reset' }).catch(() => undefined);
   const streamId = await new Promise<string>((resolve, reject) =>
     chrome.tabCapture.getMediaStreamId({ targetTabId: tab.id! }, id => {
       const error = chrome.runtime.lastError;

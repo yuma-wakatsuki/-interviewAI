@@ -5,7 +5,7 @@ const transcript = document.querySelector('#transcript')!;
 const start = document.querySelector<HTMLButtonElement>('#start')!;
 const grantMic = document.querySelector<HTMLButtonElement>('#grant-mic')!;
 const stopButton = document.querySelector<HTMLButtonElement>('#stop')!;
-const entries: TranscriptEntry[] = [];
+let entries: TranscriptEntry[] = [];
 const partials = new Map<string, TranscriptEntry>();
 const diagnostics: string[] = [];
 async function refreshServerStatus() {
@@ -21,6 +21,18 @@ async function refreshServerStatus() {
     statusEl.textContent = 'ローカル認識サーバーが起動していません。scripts\\start_windows.ps1 を実行してください。';
   }
 }
+async function saveFinalEntries() {
+  await chrome.storage.session.set({ transcriptEntries: entries.filter(e => e.type === 'final') });
+}
+async function restoreFinalEntries() {
+  const stored = await chrome.storage.session.get('transcriptEntries');
+  if (Array.isArray(stored.transcriptEntries)) {
+    entries = stored.transcriptEntries.filter((entry: unknown): entry is TranscriptEntry =>
+      typeof entry === 'object' && entry !== null && (entry as TranscriptEntry).type === 'final');
+    render();
+  }
+}
+void restoreFinalEntries();
 void refreshServerStatus();
 function render() {
   const finalRows = entries.filter(e => e.type === 'final');
@@ -28,8 +40,21 @@ function render() {
 }
 chrome.runtime.onMessage.addListener((event: TranscriptEntry) => {
   if (!event.type) return;
+  if (event.type === 'transcript-reset') {
+    entries = [];
+    partials.clear();
+    void saveFinalEntries();
+    render();
+    return;
+  }
   if (event.type === 'partial' && event.speaker) partials.set(event.speaker, event);
-  else { if (event.type === 'final' && event.speaker) partials.delete(event.speaker); entries.push(event); }
+  else {
+    if (event.type === 'final' && event.speaker) {
+      partials.delete(event.speaker);
+      entries.push(event);
+      void saveFinalEntries();
+    }
+  }
   if (event.type === 'diagnostic' && event.detail) { diagnostics.push(event.detail); if (diagnostics.length > 20) diagnostics.shift(); }
   render();
   if (event.type === 'diagnostic' && event.detail?.includes('WebSocket connected')) statusEl.textContent = 'ローカル認識サーバーへ接続しました。';

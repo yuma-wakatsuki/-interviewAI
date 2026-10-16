@@ -20,6 +20,17 @@ async function refreshServerStatus() {
     statusEl.textContent = "\u30ED\u30FC\u30AB\u30EB\u8A8D\u8B58\u30B5\u30FC\u30D0\u30FC\u304C\u8D77\u52D5\u3057\u3066\u3044\u307E\u305B\u3093\u3002scripts\\start_windows.ps1 \u3092\u5B9F\u884C\u3057\u3066\u304F\u3060\u3055\u3044\u3002";
   }
 }
+async function saveFinalEntries() {
+  await chrome.storage.session.set({ transcriptEntries: entries.filter((e) => e.type === "final") });
+}
+async function restoreFinalEntries() {
+  const stored = await chrome.storage.session.get("transcriptEntries");
+  if (Array.isArray(stored.transcriptEntries)) {
+    entries = stored.transcriptEntries.filter((entry) => typeof entry === "object" && entry !== null && entry.type === "final");
+    render();
+  }
+}
+void restoreFinalEntries();
 void refreshServerStatus();
 function render() {
   const finalRows = entries.filter((e) => e.type === "final");
@@ -27,10 +38,20 @@ function render() {
 }
 chrome.runtime.onMessage.addListener((event) => {
   if (!event.type) return;
+  if (event.type === "transcript-reset") {
+    entries = [];
+    partials.clear();
+    void saveFinalEntries();
+    render();
+    return;
+  }
   if (event.type === "partial" && event.speaker) partials.set(event.speaker, event);
   else {
-    if (event.type === "final" && event.speaker) partials.delete(event.speaker);
-    entries.push(event);
+    if (event.type === "final" && event.speaker) {
+      partials.delete(event.speaker);
+      entries.push(event);
+      void saveFinalEntries();
+    }
   }
   if (event.type === "diagnostic" && event.detail) {
     diagnostics.push(event.detail);

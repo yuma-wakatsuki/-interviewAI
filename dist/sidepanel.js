@@ -1,6 +1,7 @@
 // src/sidepanel.ts
 var statusEl = document.querySelector("#status");
 var transcript = document.querySelector("#transcript");
+var diagnosticsEl = document.querySelector("#diagnostics");
 var start = document.querySelector("#start");
 var grantMic = document.querySelector("#grant-mic");
 var stopButton = document.querySelector("#stop");
@@ -39,6 +40,9 @@ function render() {
   const finalRows = entries.filter((e) => e.type === "final");
   transcript.textContent = [...finalRows, ...partials.values()].map((e) => e.type === "partial" ? `${speakerLabel(e.speaker)}: ${e.text} \u2026` : `[${e.timestamp ?? ""}] ${speakerLabel(e.speaker)}: ${e.text}`).join("\n");
 }
+function renderDiagnostics() {
+  diagnosticsEl.textContent = diagnostics.map((detail) => `[\u8A3A\u65AD] ${detail}`).join("\n");
+}
 chrome.runtime.onMessage.addListener((event) => {
   if (!event.type) return;
   if (event.type === "transcript-reset") {
@@ -59,12 +63,16 @@ chrome.runtime.onMessage.addListener((event) => {
   if (event.type === "diagnostic" && event.detail) {
     diagnostics.push(event.detail);
     if (diagnostics.length > 20) diagnostics.shift();
+    renderDiagnostics();
   }
   render();
   if (event.type === "diagnostic" && event.detail?.includes("WebSocket connected")) statusEl.textContent = "\u30ED\u30FC\u30AB\u30EB\u8A8D\u8B58\u30B5\u30FC\u30D0\u30FC\u3078\u63A5\u7D9A\u3057\u307E\u3057\u305F\u3002";
   if (event.type === "diagnostic" && event.detail?.includes("Meet audio capture started")) statusEl.textContent = "Meet \u97F3\u58F0\u3092\u9332\u97F3\u4E2D\u3067\u3059\u3002\u6B21\u306B\u300C\u30DE\u30A4\u30AF\u3092\u8A31\u53EF\u300D\u3092\u62BC\u3057\u3066\u304F\u3060\u3055\u3044\u3002";
   if (event.type === "diagnostic" && event.detail?.includes("Interviewer microphone capture started")) statusEl.textContent = "Meet \u97F3\u58F0\u3068\u30DE\u30A4\u30AF\u3092\u9332\u97F3\u4E2D\u3067\u3059\u3002";
   if (event.type === "diagnostic" && event.detail?.includes("Capture stopped")) statusEl.textContent = "\u505C\u6B62\u3057\u307E\u3057\u305F\u3002";
+  if (event.type === "diagnostic" && event.detail?.includes("queue overflow")) statusEl.textContent = "\u97F3\u58F0\u51E6\u7406\u304C\u8FFD\u3044\u3064\u3044\u3066\u3044\u307E\u305B\u3093\u3002\u8A3A\u65AD\u30ED\u30B0\u3092\u78BA\u8A8D\u3057\u3066\u304F\u3060\u3055\u3044\u3002";
+  if (event.type === "diagnostic" && event.detail?.includes("WebSocket disconnected")) statusEl.textContent = "\u30ED\u30FC\u30AB\u30EB\u8A8D\u8B58\u30B5\u30FC\u30D0\u30FC\u3078\u306E\u518D\u63A5\u7D9A\u3092\u8A66\u307F\u3066\u3044\u307E\u3059\u3002";
+  if (event.type === "diagnostic" && event.detail?.includes("server error")) statusEl.textContent = "\u8A8D\u8B58\u30B5\u30FC\u30D0\u30FC\u3067\u30A8\u30E9\u30FC\u304C\u767A\u751F\u3057\u307E\u3057\u305F\u3002\u8A3A\u65AD\u30ED\u30B0\u3092\u78BA\u8A8D\u3057\u3066\u304F\u3060\u3055\u3044\u3002";
 });
 start.onclick = async () => {
   statusEl.textContent = "Google Meet \u306E\u30BF\u30D6\u3092\u9078\u3073\u3001Chrome\u53F3\u4E0A\u306E\u62E1\u5F35\u6A5F\u80FD\u30A2\u30A4\u30B3\u30F3\u3092\u30AF\u30EA\u30C3\u30AF\u3057\u3066\u958B\u59CB\u3057\u3066\u304F\u3060\u3055\u3044\u3002";

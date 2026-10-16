@@ -2,6 +2,7 @@ export {};
 type TranscriptEntry = { speaker?: string; text?: string; timestamp?: string; detail?: string; type: string };
 const statusEl = document.querySelector('#status')!;
 const transcript = document.querySelector('#transcript')!;
+const diagnosticsEl = document.querySelector('#diagnostics')!;
 const start = document.querySelector<HTMLButtonElement>('#start')!;
 const grantMic = document.querySelector<HTMLButtonElement>('#grant-mic')!;
 const stopButton = document.querySelector<HTMLButtonElement>('#stop')!;
@@ -44,6 +45,7 @@ function render() {
       ? `${speakerLabel(e.speaker)}: ${e.text} …`
       : `[${e.timestamp ?? ''}] ${speakerLabel(e.speaker)}: ${e.text}`).join('\n');
 }
+function renderDiagnostics() { diagnosticsEl.textContent = diagnostics.map(detail => `[診断] ${detail}`).join('\n'); }
 chrome.runtime.onMessage.addListener((event: TranscriptEntry) => {
   if (!event.type) return;
   if (event.type === 'transcript-reset') {
@@ -61,12 +63,18 @@ chrome.runtime.onMessage.addListener((event: TranscriptEntry) => {
       void saveFinalEntries();
     }
   }
-  if (event.type === 'diagnostic' && event.detail) { diagnostics.push(event.detail); if (diagnostics.length > 20) diagnostics.shift(); }
+  if (event.type === 'diagnostic' && event.detail) {
+    diagnostics.push(event.detail); if (diagnostics.length > 20) diagnostics.shift();
+    renderDiagnostics();
+  }
   render();
   if (event.type === 'diagnostic' && event.detail?.includes('WebSocket connected')) statusEl.textContent = 'ローカル認識サーバーへ接続しました。';
   if (event.type === 'diagnostic' && event.detail?.includes('Meet audio capture started')) statusEl.textContent = 'Meet 音声を録音中です。次に「マイクを許可」を押してください。';
   if (event.type === 'diagnostic' && event.detail?.includes('Interviewer microphone capture started')) statusEl.textContent = 'Meet 音声とマイクを録音中です。';
   if (event.type === 'diagnostic' && event.detail?.includes('Capture stopped')) statusEl.textContent = '停止しました。';
+  if (event.type === 'diagnostic' && event.detail?.includes('queue overflow')) statusEl.textContent = '音声処理が追いついていません。診断ログを確認してください。';
+  if (event.type === 'diagnostic' && event.detail?.includes('WebSocket disconnected')) statusEl.textContent = 'ローカル認識サーバーへの再接続を試みています。';
+  if (event.type === 'diagnostic' && event.detail?.includes('server error')) statusEl.textContent = '認識サーバーでエラーが発生しました。診断ログを確認してください。';
 });
 start.onclick = async () => {
   statusEl.textContent = 'Google Meet のタブを選び、Chrome右上の拡張機能アイコンをクリックして開始してください。';

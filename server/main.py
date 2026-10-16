@@ -1,5 +1,5 @@
 """Phase 1 diagnostic server: validates PCM frames and writes separate WAV files; no transcript is persisted."""
-import asyncio, json, logging, os, re, struct, time, wave
+import asyncio, json, logging, os, re, struct, sys, time, wave
 from collections import defaultdict
 from pathlib import Path
 from typing import Any
@@ -22,7 +22,10 @@ PARTIAL_INTERVAL_SECONDS = 1.0
 MIN_FINAL_AUDIO_SECONDS = 0.6
 MIN_MEANINGFUL_VOICE_SECONDS = 1.0
 FINAL_SILENCE_SAMPLES = int(RATE * 0.8)
-MODEL = Path("server/models/sherpa-onnx-zipformer-ja-reazonspeech-2024-08-01")
+# PyInstaller exposes bundled files in _MEIPASS. Source execution continues to
+# resolve models from the repository root.
+RUNTIME_ROOT = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parents[1]))
+MODEL = RUNTIME_ROOT / "server" / "models" / "sherpa-onnx-zipformer-ja-reazonspeech-2024-08-01"
 LOW_INFORMATION_RESULTS = {"え", "えっ", "えー", "あ", "あっ", "あー", "うん", "ん", "はい", "何", "なに", "ピッ", "フッ", "おっ", "いい", "うんうん"}
 VAD_FRAME_SAMPLES = RATE // 50  # 20 ms, a WebRTC VAD-supported duration
 VAD_MODE = 2  # Balanced rejection of noise without the most aggressive speech loss

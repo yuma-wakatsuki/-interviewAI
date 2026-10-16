@@ -2,5 +2,7 @@ node_modules/
 diagnostics/
 .venv/
 server/models/
+release/
+build/
 __pycache__/
 *.pyc

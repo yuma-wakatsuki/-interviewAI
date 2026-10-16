@@ -1,6 +1,6 @@
 # InterviewAI Transcriber
 
-This local-first Chrome Manifest V3 extension captures Google Meet tab audio and the interviewer's microphone separately. It converts both to 16 kHz signed PCM, sends 100 ms framed audio over WebSocket, and performs Japanese recognition locally with the Apache-2.0 licensed ReazonSpeech Zipformer model through sherpa-onnx. The side panel distinguishes provisional and final results, and can export final results as TXT. Candidate audio and transcripts are not stored by the server; WAV files are retained only in the current diagnostic phase for audio validation.
+This local-first Chrome Manifest V3 extension captures Google Meet tab audio and the interviewer's microphone separately. It converts both to 16 kHz signed PCM, sends 100 ms framed audio over WebSocket, and performs Japanese recognition locally with the Apache-2.0 licensed ReazonSpeech Zipformer model through sherpa-onnx. The side panel distinguishes provisional and final results, and can export final results as TXT. Candidate audio and transcripts are not stored by the server.
 
 ## Run the diagnostic server
 
@@ -25,6 +25,15 @@ npm run build
 The committed `dist/` folder is a ready-to-load build for Windows users who download the repository ZIP. Run the build only after changing the source files.
 
 In `chrome://extensions`, enable Developer mode, choose **Load unpacked**, and select `dist/`. With the Google Meet tab selected, click the extension's toolbar icon. This direct action starts Meet capture and opens the side panel. Click **マイクを許可**; a dedicated InterviewAI permission tab opens. Click its button and approve Chrome's prompt to capture interviewer audio. The server writes `diagnostics/audio/*-candidate.wav` and `*-interviewer.wav` while diagnostics are enabled. The side panel shows a speaker's newest provisional result with `…`; it becomes a timestamped final row after silence. **TXT 保存** exports final rows only.
+
+WAV diagnostics are disabled by default so normal interview audio is not retained. To verify audio input during setup, start the server once with diagnostics explicitly enabled:
+
+```bash
+# Windows PowerShell
+$env:INTERVIEWAI_DIAGNOSTIC_WAV = '1'; python -m uvicorn server.main:app --host 127.0.0.1 --port 8765
+```
+
+Close that PowerShell window and start the normal command again for real interviews.
 
 ## Local verification
 

@@ -1,5 +1,5 @@
 """Phase 1 diagnostic server: validates PCM frames and writes separate WAV files; no transcript is persisted."""
-import asyncio, json, logging, re, struct, time, wave
+import asyncio, json, logging, os, re, struct, time, wave
 from collections import defaultdict
 from pathlib import Path
 from typing import Any
@@ -14,6 +14,7 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(mess
 app = FastAPI()
 OUT = Path("diagnostics/audio")
 RATE, CHANNELS, WIDTH = 16_000, 1, 2
+DIAGNOSTIC_WAV = os.environ.get("INTERVIEWAI_DIAGNOSTIC_WAV") == "1"
 MAX_BUFFER_BYTES = RATE * WIDTH * 30
 MIN_PARTIAL_AUDIO_SECONDS = 0.8
 PARTIAL_INTERVAL_SECONDS = 1.0
@@ -26,7 +27,7 @@ def recognizer() -> sherpa_onnx.OfflineRecognizer:
 
 class Session:
     def __init__(self) -> None:
-        OUT.mkdir(parents=True, exist_ok=True)
+        if DIAGNOSTIC_WAV: OUT.mkdir(parents=True, exist_ok=True)
         self.stamp = time.strftime("%Y%m%d-%H%M%S")
         self.wav: dict[str, wave.Wave_write] = {}
         self.sequence = defaultdict(lambda: -1)
@@ -39,6 +40,7 @@ class Session:
         self.silence_samples = defaultdict(int)
 
     def write(self, speaker: str, data: bytes) -> None:
+        if not DIAGNOSTIC_WAV: return
         writer = self.wav.get(speaker)
         if writer is None:
             writer = wave.open(str(OUT / f"{self.stamp}-{speaker}.wav"), "wb")
@@ -61,7 +63,8 @@ class Session:
 @app.get("/health")
 def health() -> dict[str, Any]:
     process = psutil.Process()
-    return {"status": "ok", "cpu_percent": process.cpu_percent(), "rss_bytes": process.memory_info().rss}
+    return {"status": "ok", "cpu_percent": process.cpu_percent(), "rss_bytes": process.memory_info().rss,
+            "diagnostic_wav_enabled": DIAGNOSTIC_WAV, "model_available": MODEL.exists()}
 
 @app.websocket("/ws")
 async def ws(websocket: WebSocket) -> None:

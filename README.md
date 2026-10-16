@@ -19,7 +19,7 @@ npm run typecheck
 npm run build
 ```
 
-In `chrome://extensions`, enable Developer mode, choose **Load unpacked**, and select `dist/`. Open the side panel on an active Google Meet tab and press Start. Grant microphone permission. The server writes `diagnostics/audio/*-candidate.wav` and `*-interviewer.wav`.
+In `chrome://extensions`, enable Developer mode, choose **Load unpacked**, and select `dist/`. With the Google Meet tab selected, click the extension's toolbar icon. This direct action starts capture and opens the side panel; grant microphone permission. The server writes `diagnostics/audio/*-candidate.wav` and `*-interviewer.wav`.
 
 ## Phase 1 acceptance checks
 

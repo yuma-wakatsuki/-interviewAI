@@ -18,9 +18,13 @@ if ($manifestJson.manifest_version -ne 3) { throw 'The packaged extension is not
 $previousPort = $env:INTERVIEWAI_PORT
 $env:INTERVIEWAI_PORT = '18765'
 $process = $null
+$stdoutLog = Join-Path $ReleaseRoot 'package-smoke-test.stdout.log'
+$stderrLog = Join-Path $ReleaseRoot 'package-smoke-test.stderr.log'
 
 try {
-  $process = Start-Process -FilePath $exe -WorkingDirectory $exeDirectory -PassThru
+  Remove-Item $stdoutLog, $stderrLog -Force -ErrorAction SilentlyContinue
+  $process = Start-Process -FilePath $exe -WorkingDirectory $exeDirectory -PassThru `
+    -RedirectStandardOutput $stdoutLog -RedirectStandardError $stderrLog
   $healthy = $false
   for ($attempt = 1; $attempt -le 60; $attempt++) {
     Start-Sleep -Milliseconds 500
@@ -31,7 +35,12 @@ try {
         break
       }
     } catch {
-      if ($process.HasExited) { throw 'Packaged server exited before responding to /health.' }
+      if ($process.HasExited) {
+        $details = ''
+        if (Test-Path $stderrLog) { $details = Get-Content -Raw -Path $stderrLog }
+        if (-not $details -and (Test-Path $stdoutLog)) { $details = Get-Content -Raw -Path $stdoutLog }
+        throw "Packaged server exited before responding to /health. Output: $details"
+      }
     }
   }
   if (-not $healthy) { throw 'Packaged server did not respond to /health within 30 seconds.' }

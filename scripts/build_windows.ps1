@@ -15,6 +15,7 @@ if (-not (Test-Path (Join-Path $modelPath 'encoder-epoch-99-avg-1.int8.onnx'))) 
 & $python -m PyInstaller --noconfirm --clean --onedir --name InterviewAI-Local `
   --collect-all sherpa_onnx --collect-all numpy `
   --additional-hooks-dir (Join-Path $PSScriptRoot 'pyinstaller-hooks') `
+  --hidden-import server.main `
   --add-data "$modelPath;server/models/$modelName" `
   --distpath $releaseRoot --workpath (Join-Path $projectRoot 'build') --specpath (Join-Path $projectRoot 'build') `
   server/launch.py

@@ -38,6 +38,7 @@ class Session:
         self.last_audio = defaultdict(time.monotonic)
         self.final_text = defaultdict(str)
         self.silence_samples = defaultdict(int)
+        self.last_rejection = defaultdict(str)
 
     def write(self, speaker: str, data: bytes) -> None:
         if not DIAGNOSTIC_WAV: return
@@ -55,10 +56,19 @@ class Session:
         if not self.asr or not self.audio[speaker]: return ""
         stream = self.asr.create_stream(); stream.accept_waveform(RATE, np.frombuffer(self.audio[speaker], dtype=np.int16).astype(np.float32)/32768); self.asr.decode_stream(stream); return stream.result.text.strip()
 
-    def acceptable(self, speaker: str, text: str) -> bool:
+    def rejection_reason(self, speaker: str, text: str) -> str | None:
         compact = re.sub(r"\s+", "", text)
-        if not compact or re.search(r"(.)\1{7,}", compact): return False
-        return compact != re.sub(r"\s+", "", self.final_text[speaker])
+        if not compact: return "empty recognition result"
+        if re.search(r"(.)\1{7,}", compact): return "repeated-character recognition result"
+        if compact == re.sub(r"\s+", "", self.final_text[speaker]): return "duplicate final recognition result"
+        return None
+
+    async def report_rejection(self, websocket: WebSocket, speaker: str, text: str, reason: str) -> None:
+        record("asr_rejected", speaker=speaker, reason=reason, text_length=len(text))
+        key = f"{speaker}:{reason}"
+        if self.last_rejection[speaker] != key:
+            self.last_rejection[speaker] = key
+            await websocket.send_json({"type":"diagnostic", "detail":f"ASR result rejected ({speaker}): {reason}"})
 
 @app.get("/health")
 def health() -> dict[str, Any]:
@@ -102,7 +112,11 @@ async def ws(websocket: WebSocket) -> None:
                 started = time.monotonic(); text = await asyncio.wait_for(asyncio.to_thread(session.decode, speaker), timeout=5)
                 record("partial_decode", speaker=speaker, elapsed_ms=round((time.monotonic()-started)*1000, 1), audio_seconds=round(len(session.audio[speaker])/(RATE*WIDTH), 3))
                 session.last_partial[speaker] = time.monotonic()
-                if session.acceptable(speaker, text): await websocket.send_json({"type":"partial", "speaker":speaker, "text":text, "timestamp":time.strftime('%H:%M:%S')})
+                reason = session.rejection_reason(speaker, text)
+                if reason: await session.report_rejection(websocket, speaker, text, reason)
+                else:
+                    session.last_rejection[speaker] = ""
+                    await websocket.send_json({"type":"partial", "speaker":speaker, "text":text, "timestamp":time.strftime('%H:%M:%S')})
             if session.silence_samples[speaker] >= FINAL_SILENCE_SAMPLES and session.audio[speaker]:
                 audio_seconds = len(session.audio[speaker]) / (RATE * WIDTH)
                 if audio_seconds < MIN_FINAL_AUDIO_SECONDS:
@@ -110,7 +124,11 @@ async def ws(websocket: WebSocket) -> None:
                     continue
                 started = time.monotonic(); text = await asyncio.wait_for(asyncio.to_thread(session.decode, speaker), timeout=5)
                 record("final_decode", speaker=speaker, elapsed_ms=round((time.monotonic()-started)*1000, 1), audio_seconds=round(len(session.audio[speaker])/(RATE*WIDTH), 3))
-                if session.acceptable(speaker, text):
+                reason = session.rejection_reason(speaker, text)
+                if reason:
+                    await session.report_rejection(websocket, speaker, text, reason)
+                else:
+                    session.last_rejection[speaker] = ""
                     session.final_text[speaker] = text
                     await websocket.send_json({"type":"final", "speaker":speaker, "text":text, "timestamp":time.strftime('%H:%M:%S')})
                 session.audio[speaker].clear(); session.silence_samples[speaker] = 0

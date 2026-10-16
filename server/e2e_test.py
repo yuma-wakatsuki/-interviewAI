@@ -32,19 +32,40 @@ async def main() -> None:
         speech = source.readframes(16000 * 3)
     received: list[dict[str, str]] = []
     async with websockets.connect(URL, max_size=2**23) as ws:
-        await send_audio(ws, 0, speech)
-        await asyncio.sleep(1.2)
-        await send_audio(ws, 1, b"\0\0" * 16000)
-        deadline = asyncio.get_running_loop().time() + 20
-        while asyncio.get_running_loop().time() < deadline:
-            try:
-                message = json.loads(await asyncio.wait_for(ws.recv(), timeout=1))
+        final_received = asyncio.Event()
+
+        async def receive() -> None:
+            while True:
+                message = json.loads(await ws.recv())
                 received.append(message)
-            except asyncio.TimeoutError:
-                continue
-    partial = next((item for item in received if item.get("type") == "partial"), None)
+                if message.get("type") == "final":
+                    final_received.set()
+
+        receiver = asyncio.create_task(receive())
+        # Match the extension's 100 ms packets rather than sending one large
+        # test frame. This catches a protocol or batching regression.
+        packet_bytes = 16000 // 10 * 2
+        sequence = 0
+        for offset in range(0, len(speech), packet_bytes):
+            await send_audio(ws, sequence, speech[offset:offset + packet_bytes])
+            sequence += 1
+            await asyncio.sleep(0.1)
+        for _ in range(8):
+            await send_audio(ws, sequence, b"\0\0" * (16000 // 10))
+            sequence += 1
+            await asyncio.sleep(0.1)
+        try:
+            await asyncio.wait_for(final_received.wait(), timeout=20)
+        except asyncio.TimeoutError:
+            pass
+        receiver.cancel()
+        try:
+            await receiver
+        except asyncio.CancelledError:
+            pass
+    partials = [item for item in received if item.get("type") == "partial"]
     final = next((item for item in received if item.get("type") == "final"), None)
-    if not partial or not final or "気象庁" not in partial.get("text", "") or "気象庁" not in final.get("text", ""):
+    if not any("気象庁" in item.get("text", "") for item in partials) or not final or "気象庁" not in final.get("text", ""):
         raise SystemExit(f"ASR protocol check failed: {json.dumps(received, ensure_ascii=False)}")
     print("PASS: received partial and final Japanese recognition results")
 

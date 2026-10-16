@@ -94,6 +94,8 @@ function stop() {
   audioContexts.forEach(context => context.close().catch(() => undefined));
   audioContexts = [];
   microphoneAttached = false;
+  pending.length = 0;
+  sequence = 0;
   socket?.close(); socket = undefined;
   emit({ type: 'diagnostic', detail: 'Capture stopped.' });
 }
